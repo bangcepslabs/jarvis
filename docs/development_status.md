@@ -155,6 +155,10 @@ The first Android integration spike keeps proprietary Cubism binaries local:
 - Physics: PASS (loaded and exercised during renderer smoke)
 - Cubism expressions: PASS (`shuiyin` loaded from model3.json and applied through
   `CubismExpressionMotionManager`)
+- Phone projection/scaling: PASS (Pixel 7 portrait framing adjusted to head,
+  torso, and upper-leg emphasis)
+- Live2D dark background: NOT VERIFIED (legacy PlatformView surface remains
+  white despite native clear/background attempts)
 - Eye blink: NOT IMPLEMENTED in this phase
 - Flutter analyze: PASS
 - Flutter test: PASS
@@ -181,10 +185,10 @@ manual](https://docs.live2d.com/en/cubism-sdk-manual/model-java/).
 ### Development Expression Comparison
 
 The `shuiyin.exp3.json` expression is registered by the Ellen model3.json and
-is available through the official expression manager. The development-only
-switch is controlled with
-`--dart-define=JARVIS_LIVE2D_EXPRESSION=shuiyin`; leaving the define empty
-keeps the expression removed. On the Pixel 7 Android emulator:
+is available through the official expression manager. The development renderer
+defaults to `shuiyin`; it can still be selected explicitly with
+`--dart-define=JARVIS_LIVE2D_EXPRESSION=shuiyin`. On the Pixel 7 Android
+emulator:
 
 - Without `shuiyin`: `FREE MODEL` and the watermark text are visible.
 - With `shuiyin`: `FREE MODEL` and the watermark text are not visible.

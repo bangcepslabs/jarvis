@@ -2,12 +2,15 @@ package com.example.avatar_client
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Color
 import android.opengl.GLES20
 import android.opengl.GLUtils
 import android.opengl.GLSurfaceView
 import android.net.Uri
 import android.util.Log
 import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
@@ -24,6 +27,7 @@ class Live2DPlatformViewFactory(private val context: Context, codec: StandardMes
 
 class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
     private val view: Live2DGlView
+    private val container: FrameLayout
 
     init {
         view = try {
@@ -35,9 +39,13 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
             Log.e("JARVIS_LIVE2D", "Asset extraction failed", error)
             Live2DGlView(context, null, null, "").also { it.failure = error.message }
         }
+        container = FrameLayout(context).apply {
+            setBackgroundColor(Color.rgb(10, 28, 46))
+            addView(view, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
     }
 
-    override fun getView(): View = view
+    override fun getView(): View = container
     override fun dispose() { view.release() }
 
     private fun extractModelTree(context: Context, modelAsset: String): File {

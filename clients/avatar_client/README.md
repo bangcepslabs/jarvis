@@ -43,9 +43,10 @@ flutter run -d android `
   --dart-define=JARVIS_LIVE2D_EXPRESSION=shuiyin
 ```
 
-Without `JARVIS_LIVE2D_EXPRESSION`, no expression is applied. The Android
-bridge loads expression names and files from the model3.json `Expressions`
-section and applies them through the official Cubism expression manager.
+The development renderer defaults to the verified `shuiyin` expression so the
+watermark-free presentation is retained. The Android bridge loads expression
+names and files from the model3.json `Expressions` section and applies them
+through the official Cubism expression manager.
 
 The bridge passes the model asset and `idle` motion to Android. The official
 Cubism Java Framework and Core binaries are installed locally under

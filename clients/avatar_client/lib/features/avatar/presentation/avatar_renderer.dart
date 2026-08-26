@@ -29,7 +29,7 @@ class AvatarRendererConfig {
     );
     const expression = String.fromEnvironment(
       'JARVIS_LIVE2D_EXPRESSION',
-      defaultValue: '',
+      defaultValue: 'shuiyin',
     );
     return AvatarRendererConfig(
       kind: renderer.toLowerCase() == 'live2d'

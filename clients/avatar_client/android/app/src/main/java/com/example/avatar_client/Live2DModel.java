@@ -51,7 +51,8 @@ final class Live2DModel extends CubismUserModel {
         if (getRenderer() == null || width <= 0 || height <= 0) return;
         setRenderTargetSize(width, height);
         getModelMatrix().loadIdentity();
-        getModelMatrix().setHeight(1.55f);
+        getModelMatrix().setHeight(2.25f);
+        getModelMatrix().setY(-0.20f);
         getRenderer().setMvpMatrix(getModelMatrix());
     }
 

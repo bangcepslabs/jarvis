@@ -1,25 +1,37 @@
 package com.example.avatar_client;
 
+import android.content.res.AssetManager;
+
 import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
+import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /** App-owned adapter around the official Cubism Java Framework. */
 final class Live2DModel extends CubismUserModel {
     private final File root;
     private final CubismModelSettingJson setting;
     private final CubismMotion idleMotion;
+    private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
 
     Live2DModel(File root, File model3Json) throws IOException {
         this.root = root;
         setting = new CubismModelSettingJson(Files.readAllBytes(model3Json.toPath()));
         loadModel(read(setting.getModelFileName()));
         if (!setting.getPhysicsFileName().isEmpty()) loadPhysics(read(setting.getPhysicsFileName()));
+        for (int i = 0; i < setting.getExpressionCount(); i++) {
+            CubismExpressionMotion expression = loadExpression(
+                    read(setting.getExpressionFileName(i)));
+            if (expression != null) expressions.put(setting.getExpressionName(i), expression);
+        }
         CubismMotion motion = null;
         if (setting.getMotionGroupCount() > 0) {
             String group = setting.getMotionGroupName(0);
@@ -31,9 +43,16 @@ final class Live2DModel extends CubismUserModel {
     void initializeRenderer(int width, int height) {
         CubismRendererAndroid renderer = (CubismRendererAndroid) CubismRendererAndroid.create(width, height);
         setupRenderer(renderer, 1);
-        renderer.setRenderTargetSize(width, height);
-        renderer.setMvpMatrix(getModelMatrix());
+        updateViewport(width, height);
         if (idleMotion != null) motionManager.startMotionPriority(idleMotion, 1);
+    }
+
+    void updateViewport(int width, int height) {
+        if (getRenderer() == null || width <= 0 || height <= 0) return;
+        setRenderTargetSize(width, height);
+        getModelMatrix().loadIdentity();
+        getModelMatrix().setHeight(1.55f);
+        getRenderer().setMvpMatrix(getModelMatrix());
     }
 
     int textureCount() { return setting.getTextureCount(); }
@@ -43,8 +62,19 @@ final class Live2DModel extends CubismUserModel {
     void update(float deltaSeconds) {
         if (getModel() == null) return;
         motionManager.updateMotion(getModel(), deltaSeconds);
+        expressionManager.updateMotion(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
         getModel().update();
+    }
+
+    boolean applyExpression(String name) {
+        CubismExpressionMotion expression = expressions.get(name);
+        if (expression == null) return false;
+        return expressionManager.startMotionPriority(expression, 1) >= 0;
+    }
+
+    void removeExpression(String name) {
+        if (expressions.containsKey(name)) expressionManager.stopAllMotions();
     }
 
     void draw() { if (getRenderer() != null) getRenderer().drawModel(); }
@@ -54,10 +84,16 @@ final class Live2DModel extends CubismUserModel {
         return Files.readAllBytes(new File(root, relativePath).toPath());
     }
 
-    static void initializeFramework() {
+    static void initializeFramework(AssetManager assets) {
         if (!CubismFramework.isStarted()) {
             CubismFramework.Option option = new CubismFramework.Option();
-            option.loadFileFunction = path -> new byte[0];
+            option.loadFileFunction = path -> {
+                try (InputStream input = assets.open(path)) {
+                    return input.readAllBytes();
+                } catch (IOException error) {
+                    throw new IllegalStateException("Unable to load Cubism asset: " + path, error);
+                }
+            };
             CubismFramework.startUp(option);
         }
         if (!CubismFramework.isInitialized()) CubismFramework.initialize();

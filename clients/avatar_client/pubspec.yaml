@@ -19,6 +19,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/avatars/development/
+    - assets/avatars/development/ellen_workshop/
+    - assets/avatars/development/ellen_workshop/免费模型艾莲.4096/
 
 

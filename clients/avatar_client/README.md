@@ -34,10 +34,22 @@ flutter run -d android `
   --dart-define=JARVIS_CORE_URL=http://10.0.2.2:8000
 ```
 
-The bridge passes the model asset and `idle` motion to Android. The current
-native view reports an SDK prerequisite fallback until the official Cubism SDK
-for Java and Core binaries are installed locally under `android/live2d_sdk/`.
-No proprietary SDK binaries are included in Git.
+For the development-only `shuiyin` expression comparison, add:
+
+```powershell
+flutter run -d android `
+  --dart-define=JARVIS_AVATAR_RENDERER=live2d `
+  --dart-define=JARVIS_CORE_URL=http://10.0.2.2:8000 `
+  --dart-define=JARVIS_LIVE2D_EXPRESSION=shuiyin
+```
+
+Without `JARVIS_LIVE2D_EXPRESSION`, no expression is applied. The Android
+bridge loads expression names and files from the model3.json `Expressions`
+section and applies them through the official Cubism expression manager.
+
+The bridge passes the model asset and `idle` motion to Android. The official
+Cubism Java Framework and Core binaries are installed locally under
+`android/live2d_sdk/`; no proprietary SDK binaries are included in Git.
 
 The API client uses the existing contracts:
 
@@ -61,11 +73,15 @@ provided by the source model.
 
 The official Cubism SDK/Core is also local-only under `android/live2d_sdk/` and
 must be obtained through Live2D's official SDK distribution and license terms.
-The current spike does not implement lip sync, expressions, wake word, or
-state-to-motion mapping. The official Framework module and Core AAR are wired
-into the local Android build, and the native view loads the model3.json asset
-tree through Cubism and renders it with OpenGL. Runtime smoke still requires an
-Android emulator or physical device.
+The current spike does not implement lip sync, wake word, or state-to-motion
+mapping. The official Framework module and Core AAR are wired
+into the local Android build. The native view reads Flutter asset lookup keys
+through `AssetManager`, copies the model tree to the app cache while preserving
+relative paths, then loads model3.json and its moc3, textures, physics, idle
+motion, and registered expressions through Cubism before rendering with
+OpenGL. The `shuiyin` expression was smoke-tested on the Pixel 7 Android
+emulator: it removes the visible `FREE MODEL`/watermark overlay without any
+texture, moc3, or ArtMesh modification.
 
 ## Checks
 
@@ -75,5 +91,4 @@ flutter test
 ```
 
 For the Android Live2D runtime gate, a connected emulator or physical device is
-required. The current APK build passes; device rendering remains intentionally
-`NOT VERIFIED` until the Windows restart and emulator setup are complete.
+required. The debug APK build and Pixel 7 emulator rendering smoke test pass.

@@ -52,7 +52,7 @@ Secrets remain local and are not recorded in this document or application logs.
 - [ ] Supertonic preferred voice selection
 - [ ] End-to-end latency profiling across multiple turns
 - [ ] Android physical-device voice round trip
-- [ ] Live2D model selection and compatibility gate
+- [x] Live2D model selection and compatibility gate
 - [ ] Wake word
 
 ## Immediate Voice Scenarios
@@ -150,22 +150,24 @@ The first Android integration spike keeps proprietary Cubism binaries local:
 - Android Framework/Core compile: PASS (local `:app:assembleDebug`)
 - model3.json resource loader: IMPLEMENTED (moc3, textures, physics, idle motion)
 - PlatformView OpenGL renderer: IMPLEMENTED
-- Android model rendering: NOT VERIFIED - emulator/device unavailable
-- Idle motion playback: IMPLEMENTED, runtime NOT VERIFIED
-- Physics: IMPLEMENTED, runtime NOT VERIFIED
+- Android model rendering: PASS (Pixel 7 Android emulator)
+- Idle motion playback: PASS (Pixel 7 Android emulator)
+- Physics: PASS (loaded and exercised during renderer smoke)
+- Cubism expressions: PASS (`shuiyin` loaded from model3.json and applied through
+  `CubismExpressionMotionManager`)
 - Eye blink: NOT IMPLEMENTED in this phase
 - Flutter analyze: PASS
 - Flutter test: PASS
 - Flutter APK build: PASS (`flutter build apk --debug`)
-- Android runtime smoke: NOT VERIFIED - Windows restart/emulator required
+- Android runtime smoke: PASS (Pixel 7 Android emulator)
 
 The renderer can be selected with
 `--dart-define=JARVIS_AVATAR_RENDERER=live2d`. On Android it creates the
 `jarvis/live2d` PlatformView and passes the development model asset plus the
 `idle` motion. The SDK is present locally and the native bridge now extracts the
 Flutter asset tree, loads model3.json references, initializes Cubism, uploads
-textures, and drives the OpenGL renderer. Runtime smoke remains unclaimed until
-an Android emulator or physical device is available.
+textures, and drives the OpenGL renderer. Runtime smoke passed on the Pixel 7
+Android emulator.
 
 The local development model is copied from the VTube Studio Workshop directory
 to `clients/avatar_client/assets/avatars/development/ellen_workshop/`. All model
@@ -176,6 +178,21 @@ The official Java model-loading flow is based on `.model3.json` file references
 and a `CubismUserModel`, as described in the [official Cubism Java model
 manual](https://docs.live2d.com/en/cubism-sdk-manual/model-java/).
 
-The remaining runtime gates are the native OpenGL model loader/renderer and a
-connected Android emulator or device. No proprietary SDK files or local model
-files were committed.
+### Development Expression Comparison
+
+The `shuiyin.exp3.json` expression is registered by the Ellen model3.json and
+is available through the official expression manager. The development-only
+switch is controlled with
+`--dart-define=JARVIS_LIVE2D_EXPRESSION=shuiyin`; leaving the define empty
+keeps the expression removed. On the Pixel 7 Android emulator:
+
+- Without `shuiyin`: `FREE MODEL` and the watermark text are visible.
+- With `shuiyin`: `FREE MODEL` and the watermark text are not visible.
+- Runtime log: `expression=shuiyin applied=true`.
+
+The result was achieved without changing the model, textures, moc3, or
+ArtMesh. `applyExpression(name)` starts the registered Cubism expression and
+`removeExpression(name)` stops expression motions through the SDK manager.
+
+No proprietary SDK files or local model files were committed. Lip sync, eye
+blink, wake word, and state-to-motion mapping remain outside this phase.

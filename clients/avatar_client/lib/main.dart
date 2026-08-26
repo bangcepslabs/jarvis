@@ -6,6 +6,7 @@ import 'features/avatar/presentation/avatar_screen.dart';
 import 'features/avatar/presentation/avatar_renderer.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   final config = ClientConfig.fromEnvironment();
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,

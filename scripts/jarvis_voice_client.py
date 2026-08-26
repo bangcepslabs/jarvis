@@ -27,7 +27,7 @@ def _mic_wav(device: int | str | None = None) -> bytes:
     frames: list[bytes] = []
 
     def callback(indata: Any, _frames: int, _time: Any, _status: Any) -> None:
-        frames.append(indata.copy().tobytes())
+        frames.append(bytes(indata))
 
     try:
         stream = sd.RawInputStream(samplerate=16000, channels=1, dtype="int16", device=device, callback=callback)
@@ -60,6 +60,14 @@ def _list_devices() -> int:
         return 1
 
 
+def _input_device_arg(value: str) -> int | str:
+    """Accept either a numeric PortAudio index or a device name."""
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
+
 def _request(client: httpx.Client, method: str, url: str, **kwargs: Any) -> httpx.Response:
     try:
         response = client.request(method, url, **kwargs)
@@ -78,6 +86,7 @@ def run_pipeline(
     conversation_id: str,
     play: bool = False,
     save_output: str | None = None,
+    recording_elapsed: float | None = None,
     client: httpx.Client | None = None,
     player: Callable[[bytes], None] | None = None,
 ) -> str | None:
@@ -85,20 +94,29 @@ def run_pipeline(
     client = client or httpx.Client(timeout=60.0)
     try:
         started = time.perf_counter()
+        stt_elapsed: float | None = None
+        chat_elapsed: float | None = None
+        tts_elapsed: float | None = None
         if text is None:
             assert audio is not None
+            stage_started = time.perf_counter()
             stt = _request(client, "POST", _url(server, "/api/stt/transcribe"), files={"file": ("voice.wav", audio, "audio/wav")}).json()
+            stt_elapsed = time.perf_counter() - stage_started
             if not stt.get("speech_detected") or not (stt.get("text") or "").strip():
                 print("No speech detected.")
                 return None
             text = str(stt["text"]).strip()
             print(f"You: {text}")
+        stage_started = time.perf_counter()
         chat = _request(client, "POST", _url(server, "/api/chat"), json={"message": text, "conversation_id": conversation_id}).json()
+        chat_elapsed = time.perf_counter() - stage_started
         reply = str(chat.get("reply", "")).strip()
         if not reply:
             raise RuntimeError("chat returned an empty reply")
         print(f"JARVIS: {reply}")
+        stage_started = time.perf_counter()
         tts = _request(client, "POST", _url(server, "/api/tts/synthesize"), json={"text": reply, "language": "ko"})
+        tts_elapsed = time.perf_counter() - stage_started
         if not tts.headers.get("content-type", "").startswith("audio/wav"):
             raise RuntimeError("TTS returned a non-WAV response")
         wav_bytes = tts.content
@@ -107,6 +125,8 @@ def run_pipeline(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             output_path.write_bytes(wav_bytes)
             print(f"Saved audio: {output_path}")
+        processing_elapsed = time.perf_counter() - started
+        playback_started = time.perf_counter()
         if play:
             if player is not None:
                 player(wav_bytes)
@@ -115,7 +135,15 @@ def run_pipeline(
                 winsound.PlaySound(wav_bytes, winsound.SND_MEMORY)
             else:
                 raise RuntimeError("local WAV playback is supported on Windows only")
-        print(f"Response latency: {time.perf_counter() - started:.2f}s")
+        playback_elapsed = time.perf_counter() - playback_started if play else 0.0
+        print("[voice]")
+        print(f"recording_elapsed={recording_elapsed:.2f}s" if recording_elapsed is not None else "recording_elapsed=not_measured")
+        print(f"stt_elapsed={stt_elapsed:.2f}s" if stt_elapsed is not None else "stt_elapsed=skipped")
+        print(f"chat_elapsed={chat_elapsed:.2f}s")
+        print(f"tts_elapsed={tts_elapsed:.2f}s")
+        print(f"processing_elapsed={processing_elapsed:.2f}s")
+        print(f"playback_elapsed={playback_elapsed:.2f}s")
+        print(f"total_elapsed={time.perf_counter() - started:.2f}s")
         return reply
     finally:
         if owns_client:
@@ -130,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--text", help="send text directly, skipping STT")
     parser.add_argument("--server", default=os.getenv("JARVIS_CORE_URL", "http://127.0.0.1:8000"))
     parser.add_argument("--conversation-id", default=f"voice-{uuid.uuid4().hex[:12]}")
-    parser.add_argument("--input-device", help="sounddevice input device index/name")
+    parser.add_argument("--input-device", type=_input_device_arg, help="sounddevice input device index/name")
     playback = parser.add_mutually_exclusive_group()
     playback.add_argument("--play", action="store_true", help="play returned WAV locally")
     playback.add_argument("--no-play", action="store_true", help="do not play returned WAV")
@@ -149,13 +177,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         audio = None
         text = args.text
+        recording_elapsed = None
         if args.file:
             if not args.file.is_file():
                 raise RuntimeError("audio file not found")
             audio = args.file.read_bytes()
         elif args.mic:
+            recording_started = time.perf_counter()
             audio = _mic_wav(args.input_device)
-        run_pipeline(server=args.server, audio=audio, text=text, conversation_id=args.conversation_id, play=args.play, save_output=args.save_output)
+            recording_elapsed = time.perf_counter() - recording_started
+        run_pipeline(server=args.server, audio=audio, text=text, conversation_id=args.conversation_id, play=args.play, save_output=args.save_output, recording_elapsed=recording_elapsed)
         return 0
     except (OSError, RuntimeError) as exc:
         print(f"Voice client error: {exc}", file=sys.stderr)

@@ -1,13 +1,14 @@
 ﻿import 'package:flutter/material.dart';
 import '../controller/avatar_controller.dart';
 import '../domain/avatar_state.dart';
+import 'avatar_renderer.dart';
 
 class AvatarScreen extends StatefulWidget {
-  const AvatarScreen({super.key, required this.controller});
+  const AvatarScreen({super.key, required this.controller, required this.rendererConfig});
   final AvatarController controller;
+  final AvatarRendererConfig rendererConfig;
   @override State<AvatarScreen> createState() => _AvatarScreenState();
 }
-
 class _AvatarScreenState extends State<AvatarScreen> {
   final input = TextEditingController();
   @override void initState() { super.initState(); widget.controller.addListener(refresh); }
@@ -26,7 +27,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
         return Center(child: SingleChildScrollView(padding: const EdgeInsets.all(24), child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 720),
           child: Column(children: [
-            _Avatar(state, size),
+            AvatarRendererHost(config: widget.rendererConfig, state: state, size: size),
             const SizedBox(height: 20),
             Text(state.label, style: Theme.of(context).textTheme.titleLarge),
             if (controller.errorMessage != null) Text(controller.errorMessage!, style: const TextStyle(color: Colors.redAccent)),
@@ -45,14 +46,3 @@ class _AvatarScreenState extends State<AvatarScreen> {
   }
 }
 
-class _Avatar extends StatelessWidget {
-  const _Avatar(this.state, this.size);
-  final AvatarState state;
-  final double size;
-  @override
-  Widget build(BuildContext context) => AnimatedContainer(
-    duration: const Duration(milliseconds: 300), width: size, height: size,
-    decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xff102b43), border: Border.all(color: state == AvatarState.error ? Colors.redAccent : const Color(0xff62d8ff), width: 3), boxShadow: [BoxShadow(color: const Color(0xff1596bd).withValues(alpha: .25), blurRadius: state == AvatarState.thinking ? 36 : 18)]),
-    child: Center(child: Icon(switch (state) { AvatarState.idle => Icons.face_6, AvatarState.listening => Icons.hearing, AvatarState.thinking => Icons.psychology, AvatarState.speaking => Icons.record_voice_over, AvatarState.error => Icons.error_outline }, size: size * .3, color: const Color(0xffb8efff))),
-  );
-}

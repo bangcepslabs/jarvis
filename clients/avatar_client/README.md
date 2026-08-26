@@ -19,10 +19,25 @@ The default URL is `http://127.0.0.1:8000`. On an Android emulator, use
 
 ## Architecture
 
-`main.dart` wires `ClientConfig`, `JarvisApiClient`, and `AvatarController`.
-The controller owns the foundation state machine: idle -> listening -> thinking
--> speaking -> idle, with network/audio failures mapped to error. The current
-renderer is a placeholder interface; Live2D is intentionally not integrated.
+`main.dart` wires `ClientConfig`, `JarvisApiClient`, `AvatarController`, and the
+renderer selection. The controller owns the foundation state machine:
+idle -> listening -> thinking -> speaking -> idle, with network/audio failures
+mapped to error. The renderer boundary supports `placeholder` and an Android
+`live2d` PlatformView bridge.
+
+The default renderer is the existing Placeholder renderer. Select the Live2D
+spike with:
+
+```powershell
+flutter run -d android `
+  --dart-define=JARVIS_AVATAR_RENDERER=live2d `
+  --dart-define=JARVIS_CORE_URL=http://10.0.2.2:8000
+```
+
+The bridge passes the model asset and `idle` motion to Android. The current
+native view reports an SDK prerequisite fallback until the official Cubism SDK
+for Java and Core binaries are installed locally under `android/live2d_sdk/`.
+No proprietary SDK binaries are included in Git.
 
 The API client uses the existing contracts:
 
@@ -38,8 +53,19 @@ client never confirms or executes pending actions automatically.
 
 Only `RECORD_AUDIO` is declared. Contacts, location, camera, and unrestricted
 storage are not requested. Development avatar assets under
-`assets/avatars/development/` are local-only and ignored by Git. Live2D model
-compatibility and adapter mapping are future work.
+`assets/avatars/development/` are local-only and ignored by Git. The development
+model is under `assets/avatars/development/ellen_workshop/`; its model3.json,
+moc3, textures, physics, CDI, expressions, and idle motions are present and the
+model references resolve correctly. Unicode filenames are intentionally kept as
+provided by the source model.
+
+The official Cubism SDK/Core is also local-only under `android/live2d_sdk/` and
+must be obtained through Live2D's official SDK distribution and license terms.
+The current spike does not implement lip sync, expressions, wake word, or
+state-to-motion mapping. The official Framework module and Core AAR are wired
+into the local Android build, and the native view loads the model3.json asset
+tree through Cubism and renders it with OpenGL. Runtime smoke still requires an
+Android emulator or physical device.
 
 ## Checks
 
@@ -47,3 +73,7 @@ compatibility and adapter mapping are future work.
 flutter analyze
 flutter test
 ```
+
+For the Android Live2D runtime gate, a connected emulator or physical device is
+required. The current APK build passes; device rendering remains intentionally
+`NOT VERIFIED` until the Windows restart and emulator setup are complete.

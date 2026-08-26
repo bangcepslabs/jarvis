@@ -1,6 +1,6 @@
 import httpx
 
-from scripts.jarvis_voice_client import run_pipeline
+from scripts.jarvis_voice_client import build_parser, run_pipeline
 
 
 class FakeClient:
@@ -19,7 +19,7 @@ def response(status=200, *, json_data=None, content=b"RIFF", content_type="appli
     return httpx.Response(status, content=content, headers={"content-type": content_type})
 
 
-def test_text_pipeline_skips_stt_and_forwards_conversation():
+def test_text_pipeline_skips_stt_and_forwards_conversation(capsys):
     fake = FakeClient([response(json_data={"reply": "부산은 맑아요."}), response(content=b"RIFFWAV", content_type="audio/wav")])
     played = []
     reply = run_pipeline(server="http://core", text="오늘 부산 날씨 어때", audio=None, conversation_id="c1", client=fake, player=played.append, play=True)
@@ -28,6 +28,18 @@ def test_text_pipeline_skips_stt_and_forwards_conversation():
     assert fake.requests[0][1].endswith("/api/chat")
     assert fake.requests[0][2]["json"]["conversation_id"] == "c1"
     assert played == [b"RIFFWAV"]
+    output = capsys.readouterr().out
+    assert "stt_elapsed=skipped" in output
+    assert "chat_elapsed=" in output
+    assert "tts_elapsed=" in output
+    assert "processing_elapsed=" in output
+    assert "total_elapsed=" in output
+
+
+def test_input_device_numeric_argument_is_parsed_as_index():
+    args = build_parser().parse_args(["--mic", "--input-device", "2"])
+    assert args.input_device == 2
+    assert isinstance(args.input_device, int)
 
 
 def test_file_pipeline_stops_on_no_speech():

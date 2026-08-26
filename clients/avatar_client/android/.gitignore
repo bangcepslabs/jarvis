@@ -12,3 +12,6 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Live2D Cubism SDK/Core is proprietary and must remain local-only.
+live2d_sdk/

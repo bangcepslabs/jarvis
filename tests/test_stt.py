@@ -7,6 +7,8 @@ from app.main import app
 from app.stt.exceptions import AudioTooLargeError, STTProviderError, STTTimeoutError
 from app.stt.models import TranscriptionResult
 from app.stt.service import STTService
+from app.api.dependencies import get_stt_service
+from app.core.config import get_settings
 
 
 class FakeSTT:
@@ -48,7 +50,10 @@ async def test_stt_provider_failure_is_safe():
         await STTService(FakeSTT(error=RuntimeError("decode"))).transcribe(b"audio")
 
 
-def test_stt_endpoint_disabled_is_safe():
+def test_stt_endpoint_disabled_is_safe(monkeypatch):
+    monkeypatch.setenv("STT_ENABLED", "false")
+    get_settings.cache_clear()
+    get_stt_service.cache_clear()
     response = TestClient(app).post("/api/stt/transcribe", files={"file": ("sample.wav", b"audio", "audio/wav")})
     assert response.status_code == 503
     assert "disabled" in response.json()["detail"].lower()

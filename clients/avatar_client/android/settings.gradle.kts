@@ -24,3 +24,11 @@ plugins {
 }
 
 include(":app")
+
+// The local Live2D SDK is intentionally ignored by git and supplied per
+// developer machine. Keep the official Framework module outside app sources.
+val live2dFrameworkDir = file("live2d_sdk/Framework/framework")
+if (live2dFrameworkDir.exists()) {
+    include(":live2d_framework")
+    project(":live2d_framework").projectDir = live2dFrameworkDir
+}

@@ -34,6 +34,16 @@ android {
     }
 }
 
+dependencies {
+    val live2dCore = file("../live2d_sdk/Core/android/Live2DCubismCore.aar")
+    if (live2dCore.exists()) {
+        implementation(files(live2dCore))
+    }
+    if (project.findProject(":live2d_framework") != null) {
+        implementation(project(":live2d_framework"))
+    }
+}
+
 kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17

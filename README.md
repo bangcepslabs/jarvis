@@ -215,3 +215,11 @@ rate-limit headers without logging API keys, authorization headers, prompts,
 memory, or tool results. HTTP 429 responses become a safe rate-limit error;
 automatic retry is intentionally not enabled. Context metrics record only
 message/schema sizes and counts.
+
+## Avatar Client
+
+`clients/avatar_client` is the independent Flutter visual/voice client (v0.1.0).
+It uses only the Core HTTP API: `/api/stt/transcribe`, `/api/chat`, and
+`/api/tts/synthesize`. See [clients/avatar_client/README.md](clients/avatar_client/README.md)
+for Android/emulator/LAN URL configuration, microphone permission, architecture,
+and the local-only development avatar asset policy.

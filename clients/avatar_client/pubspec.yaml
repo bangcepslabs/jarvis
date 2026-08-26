@@ -1,0 +1,24 @@
+﻿name: avatar_client
+description: JARVIS visual and voice client.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.12.2
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.5.0
+  cross_file: ^0.3.4+2
+  record: ^6.1.2
+  audioplayers: ^6.5.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/avatars/development/
+
+

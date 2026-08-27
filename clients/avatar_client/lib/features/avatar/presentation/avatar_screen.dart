@@ -48,6 +48,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
               config: widget.rendererConfig,
               state: state,
               size: double.infinity,
+              mouthOpen: controller.mouthOpen,
             ),
           ),
           SafeArea(

@@ -7,6 +7,7 @@ import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
+import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
 import java.io.File;
 import java.io.IOException;
@@ -21,6 +22,9 @@ final class Live2DModel extends CubismUserModel {
     private final CubismModelSettingJson setting;
     private final CubismMotion idleMotion;
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
+    private final int mouthParameterIndex;
+    private final float mouthParameterMax = 2.1f;
+    private volatile float mouthOpen;
 
     Live2DModel(File root, File model3Json) throws IOException {
         this.root = root;
@@ -38,6 +42,7 @@ final class Live2DModel extends CubismUserModel {
             if (setting.getMotionCount(group) > 0) motion = loadMotion(read(setting.getMotionFileName(group, 0)));
         }
         idleMotion = motion;
+        mouthParameterIndex = findParameterIndex("ParamMouthOpenY");
     }
 
     void initializeRenderer(int width, int height) {
@@ -65,7 +70,23 @@ final class Live2DModel extends CubismUserModel {
         motionManager.updateMotion(getModel(), deltaSeconds);
         expressionManager.updateMotion(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
+        if (mouthParameterIndex >= 0) {
+            getModel().setParameterValue(mouthParameterIndex, mouthOpen * mouthParameterMax);
+        }
         getModel().update();
+    }
+
+    void setMouthOpen(float normalizedValue) {
+        if (getModel() == null || mouthParameterIndex < 0) return;
+        mouthOpen = Math.max(0.0f, Math.min(1.0f, normalizedValue));
+    }
+
+    private int findParameterIndex(String id) {
+        for (int i = 0; i < getModel().getParameterCount(); i++) {
+            CubismId parameterId = getModel().getParameterId(i);
+            if (id.equals(parameterId.getString())) return i;
+        }
+        return -1;
     }
 
     boolean applyExpression(String name) {

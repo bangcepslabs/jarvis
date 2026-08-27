@@ -4,18 +4,29 @@ import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
+import '../lip_sync/lip_sync_analyzer.dart';
+import '../lip_sync/lip_sync_playback_controller.dart';
 
 class AvatarController extends ChangeNotifier {
-  AvatarController(this.api);
+  AvatarController(this.api) {
+    _lipSync.mouthOpen.addListener(_onMouthOpenChanged);
+  }
   final JarvisApiClient api;
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
+  final LipSyncAnalyzer _lipSyncAnalyzer = const LipSyncAnalyzer();
+  late final LipSyncPlaybackController _lipSync = LipSyncPlaybackController(
+    _AudioPlayerLipSyncSource(_player),
+  );
   AvatarState state = AvatarState.idle;
   String conversationId = 'avatar-${DateTime.now().millisecondsSinceEpoch}';
   String reply = '';
   String? errorMessage;
   bool _recording = false;
   bool get isRecording => _recording;
+  double get mouthOpen => _lipSync.mouthOpen.value;
+
+  void _onMouthOpenChanged() => notifyListeners();
 
   Future<void> toggleRecording() async {
     if (_recording) {
@@ -48,9 +59,12 @@ class AvatarController extends ChangeNotifier {
       if (text.isEmpty) return _fail('No speech detected');
       reply = await api.chat(text, conversationId);
       final audio = await api.synthesize(reply);
+      final envelope = _lipSyncAnalyzer.analyzeWav(audio);
       state = AvatarState.speaking;
       notifyListeners();
-      await _player.play(BytesSource(audio));
+      final completion = _player.onPlayerComplete.first;
+      await _lipSync.play(envelope: envelope, audioBytes: audio);
+      await completion;
       state = AvatarState.idle;
       notifyListeners();
     } catch (error) {
@@ -68,10 +82,30 @@ class AvatarController extends ChangeNotifier {
   @override
   void dispose() {
     _recorder.dispose();
+    _lipSync.mouthOpen.removeListener(_onMouthOpenChanged);
+    _lipSync.dispose();
     _player.dispose();
     api.dispose();
     super.dispose();
   }
+}
+
+final class _AudioPlayerLipSyncSource implements LipSyncPlaybackSource {
+  const _AudioPlayerLipSyncSource(this.player);
+
+  final AudioPlayer player;
+
+  @override
+  Stream<Duration> get positionStream => player.onPositionChanged;
+
+  @override
+  Stream<void> get completionStream => player.onPlayerComplete.map((_) {});
+
+  @override
+  Future<void> play(Uint8List audioBytes) => player.play(BytesSource(audioBytes));
+
+  @override
+  Future<void> stop() => player.stop();
 }
 
 

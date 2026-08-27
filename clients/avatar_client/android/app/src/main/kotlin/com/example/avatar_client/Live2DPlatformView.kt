@@ -22,7 +22,11 @@ import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid
 
 class Live2DPlatformViewFactory(private val context: Context, codec: StandardMessageCodec) : PlatformViewFactory(codec) {
     override fun create(context: Context, id: Int, args: Any?): PlatformView =
-        Live2DPlatformView(context, args as? Map<*, *>)
+        Live2DPlatformView(context, args as? Map<*, *>).also { current = it }
+
+    companion object {
+        @Volatile var current: Live2DPlatformView? = null
+    }
 }
 
 class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
@@ -46,7 +50,14 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
     }
 
     override fun getView(): View = container
-    override fun dispose() { view.release() }
+    override fun dispose() {
+        if (Live2DPlatformViewFactory.current === this) Live2DPlatformViewFactory.current = null
+        view.release()
+    }
+
+    fun setMouthOpen(value: Double) {
+        view.setMouthOpen(value.toFloat())
+    }
 
     private fun extractModelTree(context: Context, modelAsset: String): File {
         val source = "flutter_assets/" + modelAsset.split('/').joinToString("/") { Uri.encode(it) }
@@ -90,6 +101,10 @@ private class Live2DGlView(context: Context, private val root: File?, private va
     fun release() {
         queueEvent { liveRenderer.release() }
         onPause()
+    }
+
+    fun setMouthOpen(value: Float) {
+        queueEvent { liveRenderer.setMouthOpen(value) }
     }
 }
 
@@ -155,5 +170,9 @@ private class Live2DRenderer(
         model?.closeModel()
         model = null
         if (textureIds.isNotEmpty()) GLES20.glDeleteTextures(textureIds.size, textureIds, 0)
+    }
+
+    fun setMouthOpen(value: Float) {
+        model?.setMouthOpen(value)
     }
 }

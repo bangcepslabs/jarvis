@@ -208,8 +208,14 @@ attack/release smoothing, and exposes interpolated `mouthOpen` values through
 `LipSyncEnvelope.valueAt(position)`. The output is clamped to `0.0..1.0` and
 is ephemeral; raw audio and PCM samples are not logged or persisted.
 
-Live2D Lip Sync Runtime: NOT YET CONNECTED. No `ParamMouthOpenY`, Android
-bridge, Cubism parameter update, or render-loop change was made in this phase.
+Live2D Lip Sync Runtime: PASS on the Pixel 7 Android emulator. The Flutter
+renderer sends normalized mouth values through `MethodChannel('jarvis/live2d')`.
+The Android bridge queues updates on the GLSurfaceView render thread and the
+model adapter applies `ParamMouthOpenY` after motion, expression, and physics
+updates. Ellen's model-specific maximum is kept in the adapter as `2.1`.
+During a real TTS playback, the normalized value changed from `0.0` to roughly
+`0.145` and returned to `0.0` after completion; the app remained stable and
+the audio playback path completed normally.
 
 ### Lip Sync Playback Synchronization
 
@@ -219,12 +225,11 @@ completion streams, maps positions through `LipSyncEnvelope.valueAt`, and
 publishes a clamped `ValueNotifier<double>` mouth value. Start, completion,
 stop, playback error, dispose, and replacement all reset the value to `0.0`.
 The controller does not analyze WAV data again and has no Live2D or Android
-dependency. The current `AvatarController` playback is not wired to this
-controller yet; that integration remains part of the next Live2D step.
+dependency. `AvatarController` now analyzes the returned TTS WAV once and uses
+the same `AudioPlayer` position/completion streams for playback synchronization.
 
-No proprietary SDK files or local model files were committed. Live2D runtime
-lip sync, eye blink, wake word, and state-to-motion mapping remain outside this
-phase.
+No proprietary SDK files or local model files were committed. Eye blink, wake
+word, and state-to-motion mapping remain outside this phase.
 
 ### Conversation Context Budget
 

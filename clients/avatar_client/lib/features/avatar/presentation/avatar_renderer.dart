@@ -13,11 +13,13 @@ class AvatarRendererConfig {
     required this.kind,
     required this.modelAsset,
     required this.expression,
+    required this.mouthGain,
   });
 
   final AvatarRendererKind kind;
   final String modelAsset;
   final String expression;
+  final double mouthGain;
 
   factory AvatarRendererConfig.fromEnvironment() {
     const renderer = String.fromEnvironment(
@@ -33,12 +35,18 @@ class AvatarRendererConfig {
       'JARVIS_LIVE2D_EXPRESSION',
       defaultValue: 'shuiyin',
     );
+    const gainText = String.fromEnvironment(
+      'JARVIS_LIVE2D_MOUTH_GAIN',
+      defaultValue: '1.0',
+    );
+    final gain = double.tryParse(gainText);
     return AvatarRendererConfig(
       kind: renderer.toLowerCase() == 'live2d'
           ? AvatarRendererKind.live2d
           : AvatarRendererKind.placeholder,
       modelAsset: model,
       expression: expression,
+      mouthGain: gain != null && gain.isFinite ? gain.clamp(0.0, 2.0) : 1.0,
     );
   }
 }
@@ -124,6 +132,7 @@ class Live2DAvatarRenderer implements AvatarRenderer {
         'motion': 'idle',
         'state': state.name,
         'expression': config.expression,
+        'mouthGain': config.mouthGain,
       },
       creationParamsCodec: const StandardMessageCodec(),
     );

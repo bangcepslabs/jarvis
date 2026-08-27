@@ -15,13 +15,17 @@ class MainActivity : FlutterActivity() {
             .registerViewFactory("jarvis/live2d", Live2DPlatformViewFactory(this, StandardMessageCodec.INSTANCE))
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "jarvis/live2d")
             .setMethodCallHandler { call, result ->
-                if (call.method != "setMouthOpen") {
-                    result.notImplemented()
-                    return@setMethodCallHandler
-                }
-                val value = (call.arguments as? Number)?.toDouble() ?: 0.0
-                Live2DPlatformViewFactory.current?.setMouthOpen(value)
-                result.success(null)
+            if (call.method != "setMouthOpen" && call.method != "applyExpression" && call.method != "clearExpression") {
+                result.notImplemented()
+                return@setMethodCallHandler
             }
+            val view = Live2DPlatformViewFactory.current
+            when (call.method) {
+                "setMouthOpen" -> view?.setMouthOpen((call.arguments as? Number)?.toDouble() ?: 0.0)
+                "applyExpression" -> view?.applyExpression(call.arguments as? String ?: "")
+                "clearExpression" -> view?.clearExpression(call.arguments as? String ?: "")
+            }
+            result.success(true)
+        }
     }
 }

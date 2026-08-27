@@ -37,11 +37,12 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
         view = try {
             val asset = params?.get("modelAsset") as? String ?: error("modelAsset is missing")
             val expression = params?.get("expression") as? String ?: ""
+            val mouthGain = (params?.get("mouthGain") as? Number)?.toFloat() ?: 1f
             val model = extractModelTree(context, asset)
-            Live2DGlView(context, model.parentFile!!, model, expression)
+            Live2DGlView(context, model.parentFile!!, model, expression, mouthGain)
         } catch (error: Exception) {
             Log.e("JARVIS_LIVE2D", "Asset extraction failed", error)
-            Live2DGlView(context, null, null, "").also { it.failure = error.message }
+            Live2DGlView(context, null, null, "", 1f).also { it.failure = error.message }
         }
         container = FrameLayout(context).apply {
             setBackgroundColor(Color.rgb(10, 28, 46))
@@ -58,6 +59,10 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
     fun setMouthOpen(value: Double) {
         view.setMouthOpen(value.toFloat())
     }
+
+    fun applyExpression(name: String) = view.applyExpression(name)
+
+    fun clearExpression(name: String) = view.clearExpression(name)
 
     private fun extractModelTree(context: Context, modelAsset: String): File {
         val source = "flutter_assets/" + modelAsset.split('/').joinToString("/") { Uri.encode(it) }
@@ -86,8 +91,8 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
 
 }
 
-private class Live2DGlView(context: Context, private val root: File?, private val modelFile: File?, expression: String) : GLSurfaceView(context) {
-    private val liveRenderer = Live2DRenderer(root, modelFile, context.assets, expression)
+private class Live2DGlView(context: Context, private val root: File?, private val modelFile: File?, expression: String, mouthGain: Float) : GLSurfaceView(context) {
+    private val liveRenderer = Live2DRenderer(root, modelFile, context.assets, expression, mouthGain)
     var failure: String?
         get() = liveRenderer.failure
         set(value) { liveRenderer.failure = value }
@@ -106,6 +111,14 @@ private class Live2DGlView(context: Context, private val root: File?, private va
     fun setMouthOpen(value: Float) {
         queueEvent { liveRenderer.setMouthOpen(value) }
     }
+
+    fun applyExpression(name: String) {
+        queueEvent { liveRenderer.applyExpression(name) }
+    }
+
+    fun clearExpression(name: String) {
+        queueEvent { liveRenderer.clearExpression(name) }
+    }
 }
 
 private class Live2DRenderer(
@@ -113,6 +126,7 @@ private class Live2DRenderer(
     private val modelFile: File?,
     private val assets: android.content.res.AssetManager,
     private val expression: String,
+    private val mouthGain: Float,
 ) : GLSurfaceView.Renderer {
     private var model: Live2DModel? = null
     private var textureIds = IntArray(0)
@@ -124,7 +138,7 @@ private class Live2DRenderer(
         if (root == null || modelFile == null) return
         try {
             Live2DModel.initializeFramework(assets)
-            model = Live2DModel(root, modelFile)
+            model = Live2DModel(root, modelFile, mouthGain)
             if (expression.isNotEmpty()) {
                 val applied = model!!.applyExpression(expression)
                 Log.i("JARVIS_LIVE2D", "expression=$expression applied=$applied")
@@ -174,5 +188,13 @@ private class Live2DRenderer(
 
     fun setMouthOpen(value: Float) {
         model?.setMouthOpen(value)
+    }
+
+    fun applyExpression(name: String) {
+        model?.applyExpression(name)
+    }
+
+    fun clearExpression(name: String) {
+        model?.removeExpression(name)
     }
 }

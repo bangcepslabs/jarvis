@@ -24,10 +24,12 @@ final class Live2DModel extends CubismUserModel {
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
     private final int mouthParameterIndex;
     private final float mouthParameterMax = 2.1f;
+    private final float mouthGain;
     private volatile float mouthOpen;
 
-    Live2DModel(File root, File model3Json) throws IOException {
+    Live2DModel(File root, File model3Json, float mouthGain) throws IOException {
         this.root = root;
+        this.mouthGain = Math.max(0.0f, Math.min(2.0f, mouthGain));
         setting = new CubismModelSettingJson(Files.readAllBytes(model3Json.toPath()));
         loadModel(read(setting.getModelFileName()));
         if (!setting.getPhysicsFileName().isEmpty()) loadPhysics(read(setting.getPhysicsFileName()));
@@ -71,7 +73,8 @@ final class Live2DModel extends CubismUserModel {
         expressionManager.updateMotion(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
         if (mouthParameterIndex >= 0) {
-            getModel().setParameterValue(mouthParameterIndex, mouthOpen * mouthParameterMax);
+            float value = Math.min(mouthParameterMax, mouthOpen * mouthParameterMax * mouthGain);
+            getModel().setParameterValue(mouthParameterIndex, value);
         }
         getModel().update();
     }
@@ -96,7 +99,7 @@ final class Live2DModel extends CubismUserModel {
     }
 
     void removeExpression(String name) {
-        if (expressions.containsKey(name)) expressionManager.stopAllMotions();
+        if (name.isEmpty() || expressions.containsKey(name)) expressionManager.stopAllMotions();
     }
 
     void draw() { if (getRenderer() != null) getRenderer().drawModel(); }

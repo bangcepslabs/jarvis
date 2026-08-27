@@ -216,6 +216,10 @@ updates. Ellen's model-specific maximum is kept in the adapter as `2.1`.
 During a real TTS playback, the normalized value changed from `0.0` to roughly
 `0.145` and returned to `0.0` after completion; the app remained stable and
 the audio playback path completed normally.
+The development renderer accepts `JARVIS_LIVE2D_MOUTH_GAIN` in the `0.0..2.0`
+range. The Android adapter applies this gain after normalization and clamps
+the final Ellen parameter value to `2.1`; `1.5` was smoke-tested during the
+current development run, but is not yet selected as a final tuned value.
 
 ### Lip Sync Playback Synchronization
 
@@ -230,6 +234,16 @@ the same `AudioPlayer` position/completion streams for playback synchronization.
 
 No proprietary SDK files or local model files were committed. Eye blink, wake
 word, and state-to-motion mapping remain outside this phase.
+
+Development expression preview is available only in debug Live2D builds. It
+exposes the model-registered expressions and a clear action through the same
+official Cubism expression manager bridge. The Pixel 7 preview screen loaded
+without a crash; visual acceptance of each expression remains pending.
+
+Wake Word remains unimplemented. The client now defines a `WakeWordDetector`
+interface and typed detected/error events so a detector can later own the
+`Idle -> Listening` boundary without changing the Core STT, chat, TTS, or
+avatar layers.
 
 ### Conversation Context Budget
 

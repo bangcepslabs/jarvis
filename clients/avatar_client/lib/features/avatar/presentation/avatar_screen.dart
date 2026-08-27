@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../controller/avatar_controller.dart';
 import '../domain/avatar_state.dart';
 import 'avatar_renderer.dart';
@@ -70,6 +72,32 @@ class _AvatarScreenState extends State<AvatarScreen> {
                       ),
                     ],
                   ),
+                  if (kDebugMode &&
+                      widget.rendererConfig.kind == AvatarRendererKind.live2d)
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: [
+                        for (final name in const [
+                          'black',
+                          'red',
+                          'shock',
+                          'shou',
+                          'tang',
+                          'shuiyin',
+                        ])
+                          TextButton(
+                            onPressed: () => const MethodChannel('jarvis/live2d')
+                                .invokeMethod<void>('applyExpression', name),
+                            child: Text(name),
+                          ),
+                        TextButton(
+                          onPressed: () => const MethodChannel('jarvis/live2d')
+                              .invokeMethod<void>('clearExpression', ''),
+                          child: const Text('clear'),
+                        ),
+                      ],
+                    ),
                   const Spacer(),
                   if (controller.reply.isNotEmpty ||
                       controller.errorMessage != null)

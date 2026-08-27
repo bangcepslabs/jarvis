@@ -14,12 +14,14 @@ class AvatarRendererConfig {
     required this.modelAsset,
     required this.expression,
     required this.mouthGain,
+    required this.debugControls,
   });
 
   final AvatarRendererKind kind;
   final String modelAsset;
   final String expression;
   final double mouthGain;
+  final bool debugControls;
 
   factory AvatarRendererConfig.fromEnvironment() {
     const renderer = String.fromEnvironment(
@@ -39,6 +41,10 @@ class AvatarRendererConfig {
       'JARVIS_LIVE2D_MOUTH_GAIN',
       defaultValue: '1.0',
     );
+    const debugControls = bool.fromEnvironment(
+      'JARVIS_AVATAR_DEBUG_CONTROLS',
+      defaultValue: false,
+    );
     final gain = double.tryParse(gainText);
     return AvatarRendererConfig(
       kind: renderer.toLowerCase() == 'live2d'
@@ -47,6 +53,7 @@ class AvatarRendererConfig {
       modelAsset: model,
       expression: expression,
       mouthGain: gain != null && gain.isFinite ? gain.clamp(0.0, 2.0) : 1.0,
+      debugControls: debugControls,
     );
   }
 }

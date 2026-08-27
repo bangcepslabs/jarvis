@@ -1,9 +1,12 @@
 package com.example.avatar_client;
 
 import android.content.res.AssetManager;
+import android.util.Log;
 
 import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
+import com.live2d.sdk.cubism.framework.effect.CubismBreath;
+import com.live2d.sdk.cubism.framework.effect.CubismEyeBlink;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
@@ -15,12 +18,16 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /** App-owned adapter around the official Cubism Java Framework. */
 final class Live2DModel extends CubismUserModel {
     private final File root;
     private final CubismModelSettingJson setting;
     private final CubismMotion idleMotion;
+    private final CubismEyeBlink eyeBlink;
+    private final CubismBreath breath;
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
     private final int mouthParameterIndex;
     private final float mouthParameterMax = 2.1f;
@@ -44,6 +51,10 @@ final class Live2DModel extends CubismUserModel {
             if (setting.getMotionCount(group) > 0) motion = loadMotion(read(setting.getMotionFileName(group, 0)));
         }
         idleMotion = motion;
+        if (idleMotion != null) idleMotion.setLoop(true);
+        eyeBlink = CubismEyeBlink.create(setting);
+        breath = CubismBreath.create();
+        configureBreath();
         mouthParameterIndex = findParameterIndex("ParamMouthOpenY");
     }
 
@@ -52,14 +63,21 @@ final class Live2DModel extends CubismUserModel {
         setupRenderer(renderer, 1);
         updateViewport(width, height);
         if (idleMotion != null) motionManager.startMotionPriority(idleMotion, 1);
+        Log.i("JARVIS_LIVE2D", "idleLoop=" + (idleMotion != null) +
+                " eyeBlinkParams=" + eyeBlink.getParameterIds().size() +
+                " breathParams=" + breath.getParameters().size());
     }
 
     void updateViewport(int width, int height) {
         if (getRenderer() == null || width <= 0 || height <= 0) return;
         setRenderTargetSize(width, height);
         getModelMatrix().loadIdentity();
-        getModelMatrix().setHeight(2.25f);
-        getModelMatrix().setY(-0.20f);
+        // Medium shot: enlarge the model and place the face slightly above
+        // center, allowing the lower legs to fall outside the viewport.
+        // Slightly relax the medium-long shot so both the head and lower
+        // overlay area have breathing room without returning to full body.
+        getModelMatrix().setHeight(2.95f);
+        getModelMatrix().setY(-0.30f);
         getRenderer().setMvpMatrix(getModelMatrix());
     }
 
@@ -71,6 +89,8 @@ final class Live2DModel extends CubismUserModel {
         if (getModel() == null) return;
         motionManager.updateMotion(getModel(), deltaSeconds);
         expressionManager.updateMotion(getModel(), deltaSeconds);
+        eyeBlink.updateParameters(getModel(), deltaSeconds);
+        breath.updateParameters(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
         if (mouthParameterIndex >= 0) {
             float value = Math.min(mouthParameterMax, mouthOpen * mouthParameterMax * mouthGain);
@@ -90,6 +110,36 @@ final class Live2DModel extends CubismUserModel {
             if (id.equals(parameterId.getString())) return i;
         }
         return -1;
+    }
+
+    private CubismId findParameterId(String id) {
+        for (int i = 0; i < getModel().getParameterCount(); i++) {
+            CubismId parameterId = getModel().getParameterId(i);
+            if (id.equals(parameterId.getString())) return parameterId;
+        }
+        return null;
+    }
+
+    private void configureBreath() {
+        final List<CubismBreath.BreathParameterData> parameters = new ArrayList<>();
+        addBreathParameter(parameters, "ParamAngleX", 0.0f, 0.35f, 6.0f, 0.18f);
+        addBreathParameter(parameters, "ParamAngleY", 0.0f, 0.20f, 7.0f, 0.12f);
+        addBreathParameter(parameters, "ParamBodyAngleX", 0.0f, 0.25f, 6.5f, 0.15f);
+        addBreathParameter(parameters, "ParamBreath", 0.0f, 0.50f, 3.0f, 0.35f);
+        breath.setParameters(parameters);
+    }
+
+    private void addBreathParameter(
+            List<CubismBreath.BreathParameterData> parameters,
+            String id,
+            float offset,
+            float peak,
+            float cycle,
+            float weight) {
+        CubismId parameterId = findParameterId(id);
+        if (parameterId != null) {
+            parameters.add(new CubismBreath.BreathParameterData(parameterId, offset, peak, cycle, weight));
+        }
     }
 
     boolean applyExpression(String name) {

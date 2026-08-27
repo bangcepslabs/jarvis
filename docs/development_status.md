@@ -63,6 +63,22 @@ completed. `flutter analyze` reported only lint/info diagnostics. Root pytest
 was not available in the active shell (`python` reported that `pytest` is not
 installed).
 
+## Avatar Presentation Polish
+
+The `feat/avatar-presentation` branch keeps the validated Live2D projection
+(`2.95f`, Y `-0.30f`) and idle pipeline unchanged. Header typography and safe
+area padding are reduced, the text input uses a restrained dark surface, and
+the microphone action is compact while retaining its existing tap semantics.
+Continuous remains a secondary action and its ON indicator is shown only when
+active. Expression controls remain hidden by default and are still available
+with `JARVIS_AVATAR_DEBUG_CONTROLS=true`.
+
+The Flutter scaffold is dark, but the Android platform-view surface still
+renders white around the model on the Pixel 7 emulator. Translucent/opaque EGL
+experiments hid the model, so no unsafe surface change was retained. Dark
+background is therefore NOT VERIFIED and remains the next native composition
+task.
+
 ## Current Voice Status
 
 The Core voice pipeline has been validated on a Windows PC with a real headset.

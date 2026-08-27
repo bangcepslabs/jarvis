@@ -18,6 +18,8 @@ class AvatarScreen extends StatefulWidget {
 }
 
 class _AvatarScreenState extends State<AvatarScreen> {
+  static const surfaceColor = Color(0xff151a22);
+  static const backgroundColor = Color(0xff07111d);
   final input = TextEditingController();
   @override
   void initState() {
@@ -41,7 +43,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
     final controller = widget.controller;
     final state = controller.state;
     return Scaffold(
-      backgroundColor: const Color(0xff07111d),
+      backgroundColor: backgroundColor,
       body: Stack(
         fit: StackFit.expand,
         children: [
@@ -55,7 +57,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 20),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -64,11 +66,16 @@ class _AvatarScreenState extends State<AvatarScreen> {
                     children: [
                       Text(
                         'JARVIS',
-                        style: Theme.of(context).textTheme.headlineMedium,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                        ),
                       ),
                       Text(
                         state.label,
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
                       ),
                     ],
                   ),
@@ -138,8 +145,18 @@ class _AvatarScreenState extends State<AvatarScreen> {
                           decoration: const InputDecoration(
                             hintText: 'Type to JARVIS...',
                             filled: true,
-                            fillColor: Color(0xcc07111d),
-                            border: OutlineInputBorder(),
+                            fillColor: surfaceColor,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white24),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: Colors.white24),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderSide: BorderSide(
+                                color: Colors.lightBlueAccent,
+                              ),
+                            ),
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(
                               horizontal: 16,
@@ -158,14 +175,17 @@ class _AvatarScreenState extends State<AvatarScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 10),
                   if (controller.continuousSessionActive)
                     const Center(
                       child: Padding(
-                        padding: EdgeInsets.only(bottom: 8),
+                        padding: EdgeInsets.only(bottom: 6),
                         child: Text(
                           'Continuous: ON',
-                          style: TextStyle(color: Colors.lightBlueAccent),
+                          style: TextStyle(
+                            color: Colors.lightBlueAccent,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ),
@@ -173,7 +193,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        FloatingActionButton.large(
+                        FloatingActionButton(
                           tooltip: controller.continuousSessionActive
                               ? 'Stop continuous conversation'
                               : 'Toggle microphone',

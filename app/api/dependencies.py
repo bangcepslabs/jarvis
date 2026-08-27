@@ -11,6 +11,9 @@ from app.memory.service import MemoryService
 from app.memory.sqlite_store import SQLiteMemoryStore
 from app.memory.curator import MemoryCurator
 from app.conversation.store import InMemoryConversationStore
+from app.conversation.context import ConversationContextManager
+from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore
+from app.llm.calibration import LLMCalibrationCollector
 from app.tools.docker.tools import GetContainerLogsTool, GetContainerStatusTool, ListContainersTool
 from app.tools.docker.restart import RestartContainerTool
 from app.tools.executor import ToolExecutor
@@ -62,13 +65,26 @@ def get_chat_service() -> ChatService:
         )
     conversations = InMemoryConversationStore(settings.conversation_store_max_messages) if settings.conversation_enabled else None
     provider = create_llm_provider(settings)
+    calibration = LLMCalibrationCollector()
     curator = MemoryCurator(provider, memory, settings) if memory and settings.memory_curator_enabled else None
     return ChatService(
         JarvisAgent(
             provider, executor, registry, actions, memory,
             conversations, settings.conversation_max_messages, settings.conversation_max_context_chars,
-            ToolRouter(provider, registry, settings),
+            ToolRouter(provider, registry, settings, calibration),
             curator,
+            ConversationContextManager(
+                max_tokens=settings.conversation_context_max_tokens,
+                min_recent_turns=settings.conversation_context_min_recent_turns,
+                system_reserve=settings.conversation_context_system_reserve,
+                tool_reserve=settings.conversation_context_tool_reserve,
+                output_reserve=settings.conversation_context_output_reserve,
+            ),
+            ConversationSummaryStore(),
+            ConversationSummarizer(provider, settings.conversation_summary_max_tokens, settings.llm_summary_model),
+            settings.conversation_summary_enabled,
+            settings.conversation_summary_min_new_turns,
+            calibration,
         )
     )
 

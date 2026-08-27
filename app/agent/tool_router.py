@@ -7,6 +7,7 @@ from app.core.config import Settings
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMRateLimitError
 from app.llm.models import ToolRouteDecision
+from app.llm.calibration import LLMCalibrationCollector
 from app.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -15,10 +16,11 @@ logger = logging.getLogger(__name__)
 class ToolRouter:
     """Small capability selector; it never validates arguments or executes tools."""
 
-    def __init__(self, provider: LLMProvider, registry: ToolRegistry, settings: Settings) -> None:
+    def __init__(self, provider: LLMProvider, registry: ToolRegistry, settings: Settings, calibration: LLMCalibrationCollector | None = None) -> None:
         self._provider = provider
         self._registry = registry
         self._settings = settings
+        self._calibration = calibration or LLMCalibrationCollector()
         self.last_usage = None
         self.last_rate_limit = None
         self.last_finish_reason = None
@@ -74,6 +76,32 @@ class ToolRouter:
                 logger.warning("router_provider_unsupported")
                 return ToolRouteDecision()
             response = await self._provider.chat(messages, **kwargs)
+            try:
+                sample = self._calibration.record(
+                    messages,
+                    [],
+                    response,
+                    phase="router",
+                    conversation_turns=len(recent),
+                )
+                aggregate = self._calibration.aggregate_for("router")
+                logger.info(
+                    "llm_prompt_calibration phase=router estimated=%s actual=%s "
+                    "absolute_difference=%s ratio=%s sample_count=%s average_ratio=%s "
+                    "min_ratio=%s max_ratio=%s conversation_turns=%s memory_count=0 "
+                    "summary_present=false tool_count=0",
+                    sample.estimated_prompt_tokens,
+                    sample.actual_prompt_tokens,
+                    sample.absolute_difference,
+                    sample.ratio,
+                    aggregate.sample_count,
+                    aggregate.average_ratio,
+                    aggregate.min_ratio,
+                    aggregate.max_ratio,
+                    sample.conversation_turns,
+                )
+            except Exception:
+                logger.exception("llm_prompt_calibration_failed phase=router")
             self.last_usage = response.usage
             self.last_rate_limit = response.rate_limit
             self.last_finish_reason = response.finish_reason

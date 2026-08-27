@@ -198,5 +198,68 @@ The result was achieved without changing the model, textures, moc3, or
 ArtMesh. `applyExpression(name)` starts the registered Cubism expression and
 `removeExpression(name)` stops expression motions through the SDK manager.
 
-No proprietary SDK files or local model files were committed. Lip sync, eye
-blink, wake word, and state-to-motion mapping remain outside this phase.
+### Lip Sync Audio Analysis
+
+The renderer-independent Dart layer at
+`clients/avatar_client/lib/features/avatar/lip_sync/` is IMPLEMENTED and unit
+tested. It parses RIFF/WAVE chunks, supports PCM integer 16-bit mono/stereo
+input, calculates 30 ms RMS frames, applies noise gating, normalization, and
+attack/release smoothing, and exposes interpolated `mouthOpen` values through
+`LipSyncEnvelope.valueAt(position)`. The output is clamped to `0.0..1.0` and
+is ephemeral; raw audio and PCM samples are not logged or persisted.
+
+Live2D Lip Sync Runtime: NOT YET CONNECTED. No `ParamMouthOpenY`, Android
+bridge, Cubism parameter update, or render-loop change was made in this phase.
+
+### Lip Sync Playback Synchronization
+
+`LipSyncPlaybackController` is IMPLEMENTED and UNIT TESTED. It receives a
+playback source abstraction, subscribes to the source's actual position and
+completion streams, maps positions through `LipSyncEnvelope.valueAt`, and
+publishes a clamped `ValueNotifier<double>` mouth value. Start, completion,
+stop, playback error, dispose, and replacement all reset the value to `0.0`.
+The controller does not analyze WAV data again and has no Live2D or Android
+dependency. The current `AvatarController` playback is not wired to this
+controller yet; that integration remains part of the next Live2D step.
+
+No proprietary SDK files or local model files were committed. Live2D runtime
+lip sync, eye blink, wake word, and state-to-motion mapping remain outside this
+phase.
+
+### Conversation Context Budget
+
+`ConversationContextManager` is IMPLEMENTED and UNIT TESTED on branch
+`feat/context-budget`. It is called by `JarvisAgent` before provider calls and
+uses a replaceable lightweight token estimate, configurable total/reserve
+budgets, recent turn selection, memory selection, and compact observability
+metrics. The current user message and system prompt are retained; tool-related
+messages are selected as part of their conversation turn. Conversation storage
+remains in-memory.
+
+### Conversation Summarization
+
+`ConversationSummarizer` and `ConversationSummaryStore` extend the Context
+Budget layer. When newly dropped turns reach the configured threshold, the
+existing provider abstraction performs a best-effort incremental summary. Each
+conversation tracks summarized turn keys in memory, so the same turn is not
+summarized twice. Summary is lower priority than recent raw turns and never
+replaces the current message or system/safety prompt.
+
+Conversation Summarization: IMPLEMENTED / UNIT TESTED
+Summary persistence: NOT IMPLEMENTED (in-memory only)
+Summary → Authorization: NOT ALLOWED
+Summary → Persistent Memory automatic promotion: NOT IMPLEMENTED
+
+### LLM Prompt Token Calibration
+
+`OpenAICompatibleProvider` remains the source of provider-reported usage. The
+agent records a best-effort comparison between the existing heuristic estimate
+of all submitted messages plus tool schemas and `usage.prompt_tokens` from the
+provider response. In-memory aggregates expose sample count, average ratio,
+and minimum/maximum ratio; missing usage is recorded as unavailable and never
+blocks a chat response. Calibration is observability-only: it does not change
+context selection, budgets, routing, authorization, or safety behavior.
+
+LLM Prompt Calibration: IMPLEMENTED / UNIT TESTED
+Adaptive budget changes: NOT IMPLEMENTED (measure only)
+Raw prompt/memory/tool result logging: NOT ALLOWED

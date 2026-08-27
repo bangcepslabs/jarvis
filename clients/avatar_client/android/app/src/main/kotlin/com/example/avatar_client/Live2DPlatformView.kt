@@ -131,6 +131,7 @@ private class Live2DRenderer(
     private var model: Live2DModel? = null
     private var textureIds = IntArray(0)
     private var lastNanos = 0L
+    private var loggedViewport = false
     var failure: String? = null
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
@@ -168,6 +169,10 @@ private class Live2DRenderer(
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
         GLES20.glViewport(0, 0, width, height)
+        if (!loggedViewport) {
+            Log.i("JARVIS_LIVE2D", "viewport=${width}x${height} aspect=${width.toFloat() / height}")
+            loggedViewport = true
+        }
         model?.updateViewport(width, height)
     }
 

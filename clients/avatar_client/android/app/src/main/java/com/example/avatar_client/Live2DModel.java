@@ -68,7 +68,8 @@ final class Live2DModel extends CubismUserModel {
         Log.i("JARVIS_LIVE2D", "idleLoop=" + !idleMotions.isEmpty() +
                 " idleMotions=" + idleMotions.size() +
                 " eyeBlinkParams=" + eyeBlink.getParameterIds().size() +
-                " breathParams=" + breath.getParameters().size());
+                " breathParams=" + breath.getParameters().size() +
+                " canvas=" + getModel().getCanvasWidth() + "x" + getModel().getCanvasHeight());
     }
 
     void updateViewport(int width, int height) {
@@ -79,8 +80,8 @@ final class Live2DModel extends CubismUserModel {
         // center, allowing the lower legs to fall outside the viewport.
         // Slightly relax the medium-long shot so both the head and lower
         // overlay area have breathing room without returning to full body.
-        getModelMatrix().setHeight(2.95f);
-        getModelMatrix().setY(-0.30f);
+        getModelMatrix().setHeight(3.55f);
+        getModelMatrix().setY(-0.55f);
         getRenderer().setMvpMatrix(getModelMatrix());
     }
 

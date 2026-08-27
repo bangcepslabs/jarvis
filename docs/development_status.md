@@ -2,6 +2,67 @@
 
 Updated: 2026-08-27
 
+## Continuous Voice (foreground)
+
+The avatar client now has a separate `VoiceMode.continuous` path on
+`feat/continuous-voice`. It uses the existing `record` plugin's 16-bit PCM
+stream, a platform-independent 20 ms RMS VAD, 300 ms pre-roll, 240 ms speech
+start qualification, 800 ms silence end, 280 ms minimum speech, 30 s maximum
+utterance, and 12 s no-speech timeout. Noise floor calibration is collected
+for the first 400 ms and the threshold is `max(0.06, noiseFloor + 0.025)`.
+
+The existing one-shot WAV microphone flow is retained. Continuous mode stops
+capture during STT/chat/TTS and playback, resets mouth output after TTS, waits
+300 ms, then reacquires the microphone. Session generation and turn guards
+ignore delayed callbacks from cancelled sessions and prevent duplicate turns.
+Raw PCM is kept only in bounded pre-roll/current-utterance buffers and is not
+logged, persisted, or added to memory.
+
+- Continuous Conversation: IMPLEMENTED / UNIT TESTED
+- VAD Runtime: PASS (Pixel 7 emulator: PCM capture, listening state, idle timeout, cancel)
+- Continuous Voice E2E: NOT VERIFIED
+- Multi-turn Continuous Voice: NOT VERIFIED (emulator speech input unavailable)
+
+## Live2D Framing and Idle Life
+
+The Ellen model keeps the existing loading, renderer, physics, lip-sync, and
+overlay pipeline. The model projection is now a medium shot using height
+`2.95f` and Y offset `-0.30f`: the full head remains visible with a small top
+margin, the face sits above screen center, and the lower body remains covered
+around the thigh/slightly-below-thigh area by the conversation UI.
+
+Idle motion is explicitly configured to loop. The official Cubism eye-blink
+effect is enabled for the model's four eye-blink parameters, and the official
+breath effect is enabled for four available body/head parameters with subtle
+weights. Physics remains applied after motion/effects, and mouth lip sync is
+still applied afterward. Runtime logs confirmed `idleLoop=true`,
+`eyeBlinkParams=4`, and `breathParams=4`; two emulator screenshots taken three
+seconds apart had different SHA-256 hashes, confirming continuous animation.
+
+The expression preview remains debug-only and the existing overlay/status UI
+is retained. STT, chat, TTS, and lip-sync client code was not changed.
+
+Presentation refinements completed on the current branch:
+
+- Debug expression controls are now opt-in with
+  `JARVIS_AVATAR_DEBUG_CONTROLS=true`; default builds hide them.
+- The working Android Live2D composition path retains the existing surface
+  configuration; opaque/alpha EGL variants were tested but hid the model.
+  The legacy white platform-view background therefore remains a known visual
+  limitation.
+- Text input uses a denser layout while microphone and continuous controls
+  remain available.
+- Pixel 7 emulator confirmed the Live2D model renders with the final framing;
+  no renderer crash was observed.
+- Wake Word interface: IMPLEMENTED
+- Porcupine: EXPERIMENTAL / DEFERRED
+- Local Wake Word: PLANNED
+
+Flutter verification on this branch: 30 tests passed and debug APK build
+completed. `flutter analyze` reported only lint/info diagnostics. Root pytest
+was not available in the active shell (`python` reported that `pytest` is not
+installed).
+
 ## Current Voice Status
 
 The Core voice pipeline has been validated on a Windows PC with a real headset.
@@ -159,7 +220,7 @@ The first Android integration spike keeps proprietary Cubism binaries local:
   torso, and upper-leg emphasis)
 - Live2D dark background: NOT VERIFIED (legacy PlatformView surface remains
   white despite native clear/background attempts)
-- Eye blink: NOT IMPLEMENTED in this phase
+- Eye blink: PASS (official Cubism eye-blink effect, four parameters)
 - Flutter analyze: PASS
 - Flutter test: PASS
 - Flutter APK build: PASS (`flutter build apk --debug`)

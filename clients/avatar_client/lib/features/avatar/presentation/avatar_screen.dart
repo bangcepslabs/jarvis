@@ -73,6 +73,7 @@ class _AvatarScreenState extends State<AvatarScreen> {
                     ],
                   ),
                   if (kDebugMode &&
+                      widget.rendererConfig.debugControls &&
                       widget.rendererConfig.kind == AvatarRendererKind.live2d)
                     Wrap(
                       spacing: 4,
@@ -87,13 +88,15 @@ class _AvatarScreenState extends State<AvatarScreen> {
                           'shuiyin',
                         ])
                           TextButton(
-                            onPressed: () => const MethodChannel('jarvis/live2d')
-                                .invokeMethod<void>('applyExpression', name),
+                            onPressed: () => const MethodChannel(
+                              'jarvis/live2d',
+                            ).invokeMethod<void>('applyExpression', name),
                             child: Text(name),
                           ),
                         TextButton(
-                          onPressed: () => const MethodChannel('jarvis/live2d')
-                              .invokeMethod<void>('clearExpression', ''),
+                          onPressed: () => const MethodChannel(
+                            'jarvis/live2d',
+                          ).invokeMethod<void>('clearExpression', ''),
                           child: const Text('clear'),
                         ),
                       ],
@@ -137,6 +140,11 @@ class _AvatarScreenState extends State<AvatarScreen> {
                             filled: true,
                             fillColor: Color(0xcc07111d),
                             border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -151,16 +159,45 @@ class _AvatarScreenState extends State<AvatarScreen> {
                     ],
                   ),
                   const SizedBox(height: 14),
-                  Center(
-                    child: FloatingActionButton.large(
-                      tooltip: 'Toggle microphone',
-                      onPressed: controller.toggleRecording,
-                      backgroundColor: controller.isRecording
-                          ? Colors.redAccent
-                          : const Color(0xff1596bd),
-                      child: Icon(
-                        controller.isRecording ? Icons.stop : Icons.mic,
+                  if (controller.continuousSessionActive)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'Continuous: ON',
+                          style: TextStyle(color: Colors.lightBlueAccent),
+                        ),
                       ),
+                    ),
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton.large(
+                          tooltip: controller.continuousSessionActive
+                              ? 'Stop continuous conversation'
+                              : 'Toggle microphone',
+                          onPressed: controller.toggleRecording,
+                          backgroundColor: controller.isRecording
+                              ? Colors.redAccent
+                              : const Color(0xff1596bd),
+                          child: Icon(
+                            controller.isRecording ? Icons.stop : Icons.mic,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        IconButton.filled(
+                          tooltip: 'Start continuous conversation',
+                          onPressed: controller.continuousSessionActive
+                              ? controller.cancelContinuousConversation
+                              : controller.startContinuousConversation,
+                          icon: Icon(
+                            controller.continuousSessionActive
+                                ? Icons.stop_circle
+                                : Icons.forum,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

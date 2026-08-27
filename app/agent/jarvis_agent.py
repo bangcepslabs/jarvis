@@ -18,6 +18,7 @@ from app.tools.models import ToolResult
 from app.tools.base import ToolSafetyLevel
 from app.conversation.models import ConversationMessage
 from app.conversation.store import ConversationStore
+from app.conversation.context import ConversationContextManager, ContextSelectionResult
 
 logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_REQUEST = 1
@@ -44,6 +45,7 @@ class JarvisAgent:
         conversation_max_context_chars: int = 12000,
         tool_router: ToolRouter | None = None,
         memory_curator: MemoryCurator | None = None,
+        context_manager: ConversationContextManager | None = None,
     ) -> None:
         self._llm_provider = llm_provider
         self._tool_executor = tool_executor
@@ -55,6 +57,7 @@ class JarvisAgent:
         self._conversation_max_context_chars = max(1, conversation_max_context_chars)
         self._tool_router = tool_router
         self._memory_curator = memory_curator
+        self._context_manager = context_manager or ConversationContextManager()
 
     async def respond(self, message: str, conversation_id: str = "default") -> AgentResponse:
         active = await self._actions.get_active_action()
@@ -84,16 +87,13 @@ class JarvisAgent:
             deleted = await self._memory.delete_memory(memory_command.key, message)
             return await self._finish(conversation_id, message, AgentResponse(reply="Memory deleted." if deleted else "I could not identify exactly one memory to delete."))
 
-        messages = [ChatMessage(role="system", content=SYSTEM_PROMPT)]
+        memories = []
         if self._memory:
             memories = await self._memory.search_memories(message)
-            context = self._memory.context_text(memories)
-            if context:
-                messages.insert(1, ChatMessage(role="system", content=context))
         history = await self._context_messages(conversation_id)
-        messages.extend(ChatMessage(role=item.role, content=item.content) for item in history)
-        messages.append(ChatMessage(role="user", content=message))
-        self._log_context_metrics(messages, conversation_id)
+        selection = self._context_manager.build(SYSTEM_PROMPT, message, history, memories)
+        messages = selection.selected_messages
+        self._log_context_metrics(messages, conversation_id, selection)
         try:
             candidate = None
             if self._tool_router:
@@ -117,7 +117,7 @@ class JarvisAgent:
             response = AgentResponse(reply=llm_response.content or "I could not generate a response.")
             if self._memory_curator and self._memory and memory_command is None:
                 try:
-                    decision = await self._memory_curator.curate(message, response.reply, history, memories if 'memories' in locals() else [])
+                    decision = await self._memory_curator.curate(message, response.reply, history, memories)
                     if decision:
                         await self._memory.apply_decision(decision)
                 except Exception:
@@ -207,12 +207,12 @@ class JarvisAgent:
         logger.info("conversation_context_built conversation_id=%s message_count=%s context_chars=%s", conversation_id, len(selected), chars)
         return selected
 
-    def _log_context_metrics(self, messages: list[ChatMessage], conversation_id: str) -> None:
+    def _log_context_metrics(self, messages: list[ChatMessage], conversation_id: str, selection: ContextSelectionResult | None = None) -> None:
         system_messages = [item for item in messages if item.role == "system"]
         conversation_messages = [item for item in messages if item.role in ("user", "assistant")]
         tool_schema = self._tool_registry.get_llm_tools()
         logger.info(
-            "llm_context_metrics conversation_id=%s persona_chars=%s memory_chars=%s conversation_chars=%s current_message_chars=%s tool_count=%s tool_schema_chars=%s",
+            "llm_context_metrics conversation_id=%s persona_chars=%s memory_chars=%s conversation_chars=%s current_message_chars=%s tool_count=%s tool_schema_chars=%s estimated_context_tokens=%s context_budget=%s history_turns_selected=%s history_turns_dropped=%s memory_selected=%s",
             conversation_id,
             len(system_messages[0].content) if system_messages else 0,
             sum(len(item.content) for item in system_messages[1:]),
@@ -220,6 +220,11 @@ class JarvisAgent:
             len(conversation_messages[-1].content) if conversation_messages else 0,
             len(tool_schema),
             len(json.dumps(tool_schema, ensure_ascii=False)),
+            selection.estimated_tokens if selection else None,
+            selection.budget if selection else None,
+            selection.selected_history_turns if selection else None,
+            selection.dropped_turn_count if selection else None,
+            selection.included_memory_count if selection else None,
         )
 
     async def _finish(self, conversation_id: str, user_message: str, response: AgentResponse) -> AgentResponse:

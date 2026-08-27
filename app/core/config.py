@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     conversation_max_messages: int = 10
     conversation_max_context_chars: int = 9000
     conversation_store_max_messages: int = 50
+    conversation_context_max_tokens: int = 7000
+    conversation_context_min_recent_turns: int = 4
+    conversation_context_system_reserve: int = 1200
+    conversation_context_tool_reserve: int = 1000
+    conversation_context_output_reserve: int = 1000
     weather_enabled: bool = True
     weather_default_location: str | None = None
     weather_timeout_seconds: float = 5.0

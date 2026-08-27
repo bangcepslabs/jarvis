@@ -11,6 +11,7 @@ from app.memory.service import MemoryService
 from app.memory.sqlite_store import SQLiteMemoryStore
 from app.memory.curator import MemoryCurator
 from app.conversation.store import InMemoryConversationStore
+from app.conversation.context import ConversationContextManager
 from app.tools.docker.tools import GetContainerLogsTool, GetContainerStatusTool, ListContainersTool
 from app.tools.docker.restart import RestartContainerTool
 from app.tools.executor import ToolExecutor
@@ -69,6 +70,13 @@ def get_chat_service() -> ChatService:
             conversations, settings.conversation_max_messages, settings.conversation_max_context_chars,
             ToolRouter(provider, registry, settings),
             curator,
+            ConversationContextManager(
+                max_tokens=settings.conversation_context_max_tokens,
+                min_recent_turns=settings.conversation_context_min_recent_turns,
+                system_reserve=settings.conversation_context_system_reserve,
+                tool_reserve=settings.conversation_context_tool_reserve,
+                output_reserve=settings.conversation_context_output_reserve,
+            ),
         )
     )
 

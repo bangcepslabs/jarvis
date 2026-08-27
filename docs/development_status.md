@@ -225,3 +225,13 @@ controller yet; that integration remains part of the next Live2D step.
 No proprietary SDK files or local model files were committed. Live2D runtime
 lip sync, eye blink, wake word, and state-to-motion mapping remain outside this
 phase.
+
+### Conversation Context Budget
+
+`ConversationContextManager` is IMPLEMENTED and UNIT TESTED on branch
+`feat/context-budget`. It is called by `JarvisAgent` before provider calls and
+uses a replaceable lightweight token estimate, configurable total/reserve
+budgets, recent turn selection, memory selection, and compact observability
+metrics. The current user message and system prompt are retained; tool-related
+messages are selected as part of their conversation turn. Conversation storage
+remains in-memory and conversation summarization is NOT IMPLEMENTED.

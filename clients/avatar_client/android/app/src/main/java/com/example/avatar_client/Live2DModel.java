@@ -25,7 +25,8 @@ import java.util.List;
 final class Live2DModel extends CubismUserModel {
     private final File root;
     private final CubismModelSettingJson setting;
-    private final CubismMotion idleMotion;
+    private final List<CubismMotion> idleMotions = new ArrayList<>();
+    private int idleMotionIndex;
     private final CubismEyeBlink eyeBlink;
     private final CubismBreath breath;
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
@@ -45,13 +46,14 @@ final class Live2DModel extends CubismUserModel {
                     read(setting.getExpressionFileName(i)));
             if (expression != null) expressions.put(setting.getExpressionName(i), expression);
         }
-        CubismMotion motion = null;
         if (setting.getMotionGroupCount() > 0) {
             String group = setting.getMotionGroupName(0);
-            if (setting.getMotionCount(group) > 0) motion = loadMotion(read(setting.getMotionFileName(group, 0)));
+            for (int i = 0; i < setting.getMotionCount(group); i++) {
+                CubismMotion motion = loadMotion(read(setting.getMotionFileName(group, i)));
+                if (motion != null) idleMotions.add(motion);
+            }
         }
-        idleMotion = motion;
-        if (idleMotion != null) idleMotion.setLoop(true);
+        for (CubismMotion motion : idleMotions) motion.setLoop(idleMotions.size() == 1);
         eyeBlink = CubismEyeBlink.create(setting);
         breath = CubismBreath.create();
         configureBreath();
@@ -62,8 +64,9 @@ final class Live2DModel extends CubismUserModel {
         CubismRendererAndroid renderer = (CubismRendererAndroid) CubismRendererAndroid.create(width, height);
         setupRenderer(renderer, 1);
         updateViewport(width, height);
-        if (idleMotion != null) motionManager.startMotionPriority(idleMotion, 1);
-        Log.i("JARVIS_LIVE2D", "idleLoop=" + (idleMotion != null) +
+        if (!idleMotions.isEmpty()) motionManager.startMotionPriority(idleMotions.get(0), 1);
+        Log.i("JARVIS_LIVE2D", "idleLoop=" + !idleMotions.isEmpty() +
+                " idleMotions=" + idleMotions.size() +
                 " eyeBlinkParams=" + eyeBlink.getParameterIds().size() +
                 " breathParams=" + breath.getParameters().size());
     }
@@ -88,6 +91,10 @@ final class Live2DModel extends CubismUserModel {
     void update(float deltaSeconds) {
         if (getModel() == null) return;
         motionManager.updateMotion(getModel(), deltaSeconds);
+        if (idleMotions.size() > 1 && motionManager.isFinished()) {
+            idleMotionIndex = (idleMotionIndex + 1) % idleMotions.size();
+            motionManager.startMotionPriority(idleMotions.get(idleMotionIndex), 1);
+        }
         expressionManager.updateMotion(getModel(), deltaSeconds);
         eyeBlink.updateParameters(getModel(), deltaSeconds);
         breath.updateParameters(getModel(), deltaSeconds);

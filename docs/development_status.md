@@ -234,4 +234,18 @@ uses a replaceable lightweight token estimate, configurable total/reserve
 budgets, recent turn selection, memory selection, and compact observability
 metrics. The current user message and system prompt are retained; tool-related
 messages are selected as part of their conversation turn. Conversation storage
-remains in-memory and conversation summarization is NOT IMPLEMENTED.
+remains in-memory.
+
+### Conversation Summarization
+
+`ConversationSummarizer` and `ConversationSummaryStore` extend the Context
+Budget layer. When newly dropped turns reach the configured threshold, the
+existing provider abstraction performs a best-effort incremental summary. Each
+conversation tracks summarized turn keys in memory, so the same turn is not
+summarized twice. Summary is lower priority than recent raw turns and never
+replaces the current message or system/safety prompt.
+
+Conversation Summarization: IMPLEMENTED / UNIT TESTED
+Summary persistence: NOT IMPLEMENTED (in-memory only)
+Summary → Authorization: NOT ALLOWED
+Summary → Persistent Memory automatic promotion: NOT IMPLEMENTED

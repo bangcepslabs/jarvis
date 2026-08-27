@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     conversation_context_system_reserve: int = 1200
     conversation_context_tool_reserve: int = 1000
     conversation_context_output_reserve: int = 1000
+    conversation_summary_enabled: bool = True
+    conversation_summary_max_tokens: int = 700
+    conversation_summary_min_new_turns: int = 4
+    llm_summary_model: str | None = None
     weather_enabled: bool = True
     weather_default_location: str | None = None
     weather_timeout_seconds: float = 5.0

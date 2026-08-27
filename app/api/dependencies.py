@@ -12,6 +12,7 @@ from app.memory.sqlite_store import SQLiteMemoryStore
 from app.memory.curator import MemoryCurator
 from app.conversation.store import InMemoryConversationStore
 from app.conversation.context import ConversationContextManager
+from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore
 from app.tools.docker.tools import GetContainerLogsTool, GetContainerStatusTool, ListContainersTool
 from app.tools.docker.restart import RestartContainerTool
 from app.tools.executor import ToolExecutor
@@ -77,6 +78,10 @@ def get_chat_service() -> ChatService:
                 tool_reserve=settings.conversation_context_tool_reserve,
                 output_reserve=settings.conversation_context_output_reserve,
             ),
+            ConversationSummaryStore(),
+            ConversationSummarizer(provider, settings.conversation_summary_max_tokens, settings.llm_summary_model),
+            settings.conversation_summary_enabled,
+            settings.conversation_summary_min_new_turns,
         )
     )
 

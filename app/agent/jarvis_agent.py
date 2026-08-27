@@ -18,7 +18,8 @@ from app.tools.models import ToolResult
 from app.tools.base import ToolSafetyLevel
 from app.conversation.models import ConversationMessage
 from app.conversation.store import ConversationStore
-from app.conversation.context import ConversationContextManager, ContextSelectionResult
+from app.conversation.context import ConversationContextManager, ContextSelectionResult, EstimatedTokenCounter
+from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore, conversation_turn_key
 
 logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_REQUEST = 1
@@ -46,6 +47,10 @@ class JarvisAgent:
         tool_router: ToolRouter | None = None,
         memory_curator: MemoryCurator | None = None,
         context_manager: ConversationContextManager | None = None,
+        summary_store: ConversationSummaryStore | None = None,
+        summarizer: ConversationSummarizer | None = None,
+        summary_enabled: bool = False,
+        summary_min_new_turns: int = 4,
     ) -> None:
         self._llm_provider = llm_provider
         self._tool_executor = tool_executor
@@ -58,6 +63,11 @@ class JarvisAgent:
         self._tool_router = tool_router
         self._memory_curator = memory_curator
         self._context_manager = context_manager or ConversationContextManager()
+        self._context_manager_explicit = context_manager is not None
+        self._summary_store = summary_store or ConversationSummaryStore()
+        self._summarizer = summarizer
+        self._summary_enabled = summary_enabled and summarizer is not None
+        self._summary_min_new_turns = max(1, summary_min_new_turns)
 
     async def respond(self, message: str, conversation_id: str = "default") -> AgentResponse:
         active = await self._actions.get_active_action()
@@ -90,8 +100,50 @@ class JarvisAgent:
         memories = []
         if self._memory:
             memories = await self._memory.search_memories(message)
-        history = await self._context_messages(conversation_id)
-        selection = self._context_manager.build(SYSTEM_PROMPT, message, history, memories)
+        history = await self._context_messages(conversation_id, all_history=self._context_manager_explicit)
+        summary_state = self._summary_store.get(conversation_id) if self._summary_enabled else None
+        summary_update = None
+        selection = self._context_manager.build(
+            SYSTEM_PROMPT,
+            message,
+            history,
+            memories,
+            summary=summary_state.text if summary_state else None,
+        )
+        if self._summary_enabled and self._summarizer:
+            summarized_keys = summary_state.summarized_keys if summary_state else frozenset()
+            new_dropped = [
+                turn for turn in selection.dropped_turns
+                if conversation_turn_key(turn) not in summarized_keys
+            ]
+            if len(new_dropped) >= self._summary_min_new_turns:
+                update = await self._summarizer.update(
+                    summary_state.text if summary_state else None,
+                    new_dropped,
+                )
+                summary_update = update
+                if update.updated and update.text:
+                    summarized_keys = set(summarized_keys)
+                    summarized_keys.update(conversation_turn_key(turn) for turn in new_dropped)
+                    summary_state = self._summary_store.save(conversation_id, update.text, summarized_keys)
+                    selection = self._context_manager.build(
+                        SYSTEM_PROMPT,
+                        message,
+                        history,
+                        memories,
+                        summary=summary_state.text,
+                    )
+        logger.info(
+            "conversation_summary_metrics conversation_id=%s summary_present=%s "
+            "summary_estimated_tokens=%s summary_updated=%s newly_summarized_turns=%s "
+            "summary_update_failed=%s",
+            conversation_id,
+            bool(summary_state and summary_state.text),
+            EstimatedTokenCounter.estimate(summary_state.text, "system") if summary_state else 0,
+            bool(summary_update and summary_update.updated),
+            summary_update.new_turn_count if summary_update else 0,
+            bool(summary_update and summary_update.failed),
+        )
         messages = selection.selected_messages
         self._log_context_metrics(messages, conversation_id, selection)
         try:
@@ -188,10 +240,15 @@ class JarvisAgent:
             kwargs["tool_choice"] = tool_choice if tools else "none"
         return await self._llm_provider.chat(messages, **kwargs)
 
-    async def _context_messages(self, conversation_id: str) -> list[ConversationMessage]:
+    async def _context_messages(self, conversation_id: str, all_history: bool = False) -> list[ConversationMessage]:
         if not self._conversations:
             return []
-        recent = await self._conversations.list_recent(conversation_id, self._conversation_max_messages)
+        recent = await self._conversations.list_recent(
+            conversation_id,
+            None if all_history else self._conversation_max_messages,
+        )
+        if all_history:
+            return recent
         selected: list[ConversationMessage] = []
         chars = 0
         for item in reversed(recent):

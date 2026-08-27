@@ -20,6 +20,7 @@ from app.conversation.models import ConversationMessage
 from app.conversation.store import ConversationStore
 from app.conversation.context import ConversationContextManager, ContextSelectionResult, EstimatedTokenCounter
 from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore, conversation_turn_key
+from app.llm.calibration import LLMCalibrationCollector
 
 logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_REQUEST = 1
@@ -51,6 +52,7 @@ class JarvisAgent:
         summarizer: ConversationSummarizer | None = None,
         summary_enabled: bool = False,
         summary_min_new_turns: int = 4,
+        calibration: LLMCalibrationCollector | None = None,
     ) -> None:
         self._llm_provider = llm_provider
         self._tool_executor = tool_executor
@@ -68,6 +70,7 @@ class JarvisAgent:
         self._summarizer = summarizer
         self._summary_enabled = summary_enabled and summarizer is not None
         self._summary_min_new_turns = max(1, summary_min_new_turns)
+        self._calibration = calibration or LLMCalibrationCollector()
 
     async def respond(self, message: str, conversation_id: str = "default") -> AgentResponse:
         active = await self._actions.get_active_action()
@@ -157,7 +160,14 @@ class JarvisAgent:
             else:
                 selected_tools = self._tool_registry.get_llm_tools()
                 tool_choice = "auto"
-            llm_response = await self._provider_chat(messages, selected_tools, tool_choice)
+            llm_response = await self._provider_chat(
+                messages,
+                selected_tools,
+                tool_choice,
+                summary_present=bool(summary_state and summary_state.text),
+                conversation_turns=selection.selected_history_turns,
+                memory_count=selection.included_memory_count,
+            )
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response retry_after=%s remaining_requests=%s remaining_tokens=%s", getattr(exc.rate_limit, "retry_after", None), getattr(exc.rate_limit, "remaining_requests", None), getattr(exc.rate_limit, "remaining_tokens", None))
             return await self._finish(conversation_id, message, AgentResponse(reply=self._rate_limit_reply(exc.rate_limit)))
@@ -234,11 +244,50 @@ class JarvisAgent:
             return f"The AI service is temporarily rate limited. Please try again after {retry_after}."
         return "The AI service is temporarily rate limited. Please try again shortly."
 
-    async def _provider_chat(self, messages: list[ChatMessage], tools: list[dict[str, object]], tool_choice: str):
+    async def _provider_chat(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, object]],
+        tool_choice: str,
+        *,
+        summary_present: bool = False,
+        conversation_turns: int = 0,
+        memory_count: int = 0,
+    ):
         kwargs = {"tools": tools}
         if "tool_choice" in inspect.signature(self._llm_provider.chat).parameters:
             kwargs["tool_choice"] = tool_choice if tools else "none"
-        return await self._llm_provider.chat(messages, **kwargs)
+        response = await self._llm_provider.chat(messages, **kwargs)
+        try:
+            sample = self._calibration.record(
+                messages,
+                tools,
+                response,
+                summary_present=summary_present,
+                conversation_turns=conversation_turns,
+                memory_count=memory_count,
+            )
+            aggregate = self._calibration.aggregate
+            logger.info(
+                "llm_prompt_calibration estimated=%s actual=%s absolute_difference=%s ratio=%s "
+                "sample_count=%s average_ratio=%s min_ratio=%s max_ratio=%s "
+                "conversation_turns=%s memory_count=%s summary_present=%s tool_count=%s",
+                sample.estimated_prompt_tokens,
+                sample.actual_prompt_tokens,
+                sample.absolute_difference,
+                sample.ratio,
+                aggregate.sample_count,
+                aggregate.average_ratio,
+                aggregate.min_ratio,
+                aggregate.max_ratio,
+                sample.conversation_turns,
+                sample.memory_count,
+                sample.summary_present,
+                sample.tool_count,
+            )
+        except Exception:
+            logger.exception("llm_prompt_calibration_failed")
+        return response
 
     async def _context_messages(self, conversation_id: str, all_history: bool = False) -> list[ConversationMessage]:
         if not self._conversations:

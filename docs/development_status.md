@@ -249,3 +249,17 @@ Conversation Summarization: IMPLEMENTED / UNIT TESTED
 Summary persistence: NOT IMPLEMENTED (in-memory only)
 Summary → Authorization: NOT ALLOWED
 Summary → Persistent Memory automatic promotion: NOT IMPLEMENTED
+
+### LLM Prompt Token Calibration
+
+`OpenAICompatibleProvider` remains the source of provider-reported usage. The
+agent records a best-effort comparison between the existing heuristic estimate
+of all submitted messages plus tool schemas and `usage.prompt_tokens` from the
+provider response. In-memory aggregates expose sample count, average ratio,
+and minimum/maximum ratio; missing usage is recorded as unavailable and never
+blocks a chat response. Calibration is observability-only: it does not change
+context selection, budgets, routing, authorization, or safety behavior.
+
+LLM Prompt Calibration: IMPLEMENTED / UNIT TESTED
+Adaptive budget changes: NOT IMPLEMENTED (measure only)
+Raw prompt/memory/tool result logging: NOT ALLOWED

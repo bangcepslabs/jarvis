@@ -198,5 +198,30 @@ The result was achieved without changing the model, textures, moc3, or
 ArtMesh. `applyExpression(name)` starts the registered Cubism expression and
 `removeExpression(name)` stops expression motions through the SDK manager.
 
-No proprietary SDK files or local model files were committed. Lip sync, eye
-blink, wake word, and state-to-motion mapping remain outside this phase.
+### Lip Sync Audio Analysis
+
+The renderer-independent Dart layer at
+`clients/avatar_client/lib/features/avatar/lip_sync/` is IMPLEMENTED and unit
+tested. It parses RIFF/WAVE chunks, supports PCM integer 16-bit mono/stereo
+input, calculates 30 ms RMS frames, applies noise gating, normalization, and
+attack/release smoothing, and exposes interpolated `mouthOpen` values through
+`LipSyncEnvelope.valueAt(position)`. The output is clamped to `0.0..1.0` and
+is ephemeral; raw audio and PCM samples are not logged or persisted.
+
+Live2D Lip Sync Runtime: NOT YET CONNECTED. No `ParamMouthOpenY`, Android
+bridge, Cubism parameter update, or render-loop change was made in this phase.
+
+### Lip Sync Playback Synchronization
+
+`LipSyncPlaybackController` is IMPLEMENTED and UNIT TESTED. It receives a
+playback source abstraction, subscribes to the source's actual position and
+completion streams, maps positions through `LipSyncEnvelope.valueAt`, and
+publishes a clamped `ValueNotifier<double>` mouth value. Start, completion,
+stop, playback error, dispose, and replacement all reset the value to `0.0`.
+The controller does not analyze WAV data again and has no Live2D or Android
+dependency. The current `AvatarController` playback is not wired to this
+controller yet; that integration remains part of the next Live2D step.
+
+No proprietary SDK files or local model files were committed. Live2D runtime
+lip sync, eye blink, wake word, and state-to-motion mapping remain outside this
+phase.

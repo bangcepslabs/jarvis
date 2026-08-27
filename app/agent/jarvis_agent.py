@@ -167,6 +167,7 @@ class JarvisAgent:
                 summary_present=bool(summary_state and summary_state.text),
                 conversation_turns=selection.selected_history_turns,
                 memory_count=selection.included_memory_count,
+                phase="main",
             )
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response retry_after=%s remaining_requests=%s remaining_tokens=%s", getattr(exc.rate_limit, "retry_after", None), getattr(exc.rate_limit, "remaining_requests", None), getattr(exc.rate_limit, "remaining_tokens", None))
@@ -253,6 +254,7 @@ class JarvisAgent:
         summary_present: bool = False,
         conversation_turns: int = 0,
         memory_count: int = 0,
+        phase: str = "main",
     ):
         kwargs = {"tools": tools}
         if "tool_choice" in inspect.signature(self._llm_provider.chat).parameters:
@@ -266,6 +268,7 @@ class JarvisAgent:
                 summary_present=summary_present,
                 conversation_turns=conversation_turns,
                 memory_count=memory_count,
+                phase=phase,
             )
             aggregate = self._calibration.aggregate
             logger.info(

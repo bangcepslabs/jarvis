@@ -80,6 +80,7 @@ def test_tool_and_summary_metadata_are_recorded():
         memory_count=3,
     )
     assert sample.tool_count == 1
+    assert sample.phase == "main"
     assert sample.summary_present is True
     assert sample.conversation_turns == 8
     assert sample.memory_count == 3
@@ -98,3 +99,12 @@ def test_calibration_failure_does_not_block_agent_provider_response():
 
     response = asyncio.run(agent.respond("hello"))
     assert response.reply == "ok"
+
+
+def test_aggregate_can_be_filtered_by_phase():
+    collector = LLMCalibrationCollector()
+    estimated = collector.estimate_prompt(_messages(), [])
+    collector.record(_messages(), [], LLMResponse(usage=LLMUsage(prompt_tokens=estimated)), phase="main")
+    collector.record(_messages(), [], LLMResponse(usage=LLMUsage(prompt_tokens=estimated * 2)), phase="router")
+    assert collector.aggregate_for("main").average_ratio == 1
+    assert collector.aggregate_for("router").average_ratio == 2

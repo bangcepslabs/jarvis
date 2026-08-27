@@ -9,6 +9,7 @@ from app.llm.models import LLMResponse
 
 @dataclass(frozen=True)
 class CalibrationSample:
+    phase: str
     estimated_prompt_tokens: int
     actual_prompt_tokens: int | None
     absolute_difference: int | None
@@ -50,12 +51,15 @@ class LLMCalibrationCollector:
         summary_present: bool = False,
         conversation_turns: int = 0,
         memory_count: int = 0,
+        phase: str = "main",
+        model: str | None = None,
     ) -> CalibrationSample:
         estimated = self.estimate_prompt(messages, tools)
         actual = getattr(response.usage, "prompt_tokens", None) if response and response.usage else None
         difference = abs(actual - estimated) if actual is not None else None
         ratio = actual / estimated if actual is not None and estimated > 0 else None
         sample = CalibrationSample(
+            phase=phase,
             estimated_prompt_tokens=estimated,
             actual_prompt_tokens=actual,
             absolute_difference=difference,
@@ -74,7 +78,13 @@ class LLMCalibrationCollector:
 
     @property
     def aggregate(self) -> CalibrationAggregate:
-        ratios = [sample.ratio for sample in self._samples if sample.ratio is not None]
+        return self.aggregate_for()
+
+    def aggregate_for(self, phase: str | None = None) -> CalibrationAggregate:
+        ratios = [
+            sample.ratio for sample in self._samples
+            if sample.ratio is not None and (phase is None or sample.phase == phase)
+        ]
         return CalibrationAggregate(
             sample_count=len(ratios),
             average_ratio=sum(ratios) / len(ratios) if ratios else None,

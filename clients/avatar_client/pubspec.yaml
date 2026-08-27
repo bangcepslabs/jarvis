@@ -12,6 +12,7 @@ dependencies:
   cross_file: ^0.3.4+2
   record: ^6.1.2
   audioplayers: ^6.5.0
+  porcupine_flutter: ^4.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -21,5 +22,12 @@ flutter:
   assets:
     - assets/avatars/development/ellen_workshop/
     - assets/avatars/development/ellen_workshop/免费模型艾莲.4096/
+    - assets/wake_word/development/
+
+dependency_overrides:
+  porcupine_flutter:
+    path: ../../third_party/porcupine_flutter_4_0_0
+  flutter_voice_processor:
+    path: ../../third_party/flutter_voice_processor
 
 

@@ -11,3 +11,7 @@ data/models/tts/
 clients/avatar_client/assets/avatars/development/*
 !clients/avatar_client/assets/avatars/development/.gitkeep
 !clients/avatar_client/assets/avatars/development/README.md
+clients/avatar_client/assets/wake_word/development/
+!clients/avatar_client/assets/wake_word/development/.gitkeep
+clients/avatar_client/android/build/
+third_party/porcupine_flutter/

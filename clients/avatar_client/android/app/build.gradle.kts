@@ -6,7 +6,8 @@ plugins {
 
 android {
     namespace = "com.example.avatar_client"
-    compileSdk = flutter.compileSdkVersion
+    // Porcupine's audio processor depends on AndroidX libraries requiring API 34+.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {

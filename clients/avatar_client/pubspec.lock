@@ -187,6 +187,13 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_voice_processor:
+    dependency: "direct overridden"
+    description:
+      path: "../../third_party/flutter_voice_processor"
+      relative: true
+    source: path
+    version: "1.1.2"
   flutter_web_plugins:
     dependency: transitive
     description: flutter
@@ -392,6 +399,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.8"
+  porcupine_flutter:
+    dependency: "direct main"
+    description:
+      path: "../../third_party/porcupine_flutter_4_0_0"
+      relative: true
+    source: path
+    version: "4.0.0"
   pub_semver:
     dependency: transitive
     description:

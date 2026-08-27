@@ -232,18 +232,36 @@ The controller does not analyze WAV data again and has no Live2D or Android
 dependency. `AvatarController` now analyzes the returned TTS WAV once and uses
 the same `AudioPlayer` position/completion streams for playback synchronization.
 
-No proprietary SDK files or local model files were committed. Eye blink, wake
-word, and state-to-motion mapping remain outside this phase.
+No proprietary SDK files or local model files were committed. Eye blink and
+state-to-motion mapping remain outside this phase.
 
 Development expression preview is available only in debug Live2D builds. It
 exposes the model-registered expressions and a clear action through the same
 official Cubism expression manager bridge. The Pixel 7 preview screen loaded
 without a crash; visual acceptance of each expression remains pending.
 
-Wake Word remains unimplemented. The client now defines a `WakeWordDetector`
-interface and typed detected/error events so a detector can later own the
-`Idle -> Listening` boundary without changing the Core STT, chat, TTS, or
-avatar layers.
+Wake Word is IMPLEMENTED as a foreground-only Porcupine adapter using
+`porcupine_flutter 4.0.0`. It owns the microphone only while the avatar is
+idle, stops before recording/STT/thinking/TTS, and re-arms after the command
+returns to idle. Detection errors fall back to the existing manual microphone
+flow. The AccessKey and custom Korean `.ppn`/`.pv` files are supplied locally
+through `--dart-define` and are not committed. Runtime detection on the Pixel
+7 remains NOT VERIFIED until the local key/model files and emulator microphone
+are available.
+
+Example development configuration:
+
+```powershell
+flutter run -d emulator-5554 `
+  --dart-define=JARVIS_WAKE_WORD_ENABLED=true `
+  --dart-define=JARVIS_PICOVOICE_ACCESS_KEY=<local-key> `
+  --dart-define=JARVIS_WAKE_WORD_KEYWORD_ASSET=assets/wake_word/development/jarvis_ko.ppn `
+  --dart-define=JARVIS_WAKE_WORD_MODEL_ASSET=assets/wake_word/development/porcupine_ko.pv
+```
+
+The Flutter client treats those values as Flutter asset lookup keys. Local
+wake-word development assets are ignored by Git. No raw audio is logged,
+stored, or uploaded by the detector.
 
 ### Conversation Context Budget
 

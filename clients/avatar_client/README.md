@@ -64,7 +64,8 @@ client never confirms or executes pending actions automatically.
 
 ## Android permissions and assets
 
-Only `RECORD_AUDIO` is declared. Contacts, location, camera, and unrestricted
+`RECORD_AUDIO` and `INTERNET` are declared for microphone capture and the
+Porcupine SDK. Contacts, location, camera, and unrestricted
 storage are not requested. Development avatar assets under
 `assets/avatars/development/` are local-only and ignored by Git. The development
 model is under `assets/avatars/development/ellen_workshop/`; its model3.json,
@@ -74,8 +75,12 @@ provided by the source model.
 
 The official Cubism SDK/Core is also local-only under `android/live2d_sdk/` and
 must be obtained through Live2D's official SDK distribution and license terms.
-The current spike does not implement lip sync, wake word, or state-to-motion
-mapping. The official Framework module and Core AAR are wired
+Foreground wake word detection uses `porcupine_flutter 4.0.0` when enabled
+with a local Picovoice AccessKey and custom `.ppn`/`.pv` model paths. The
+detector is disabled by default, does not run in the background, and preserves
+manual microphone operation on initialization or authorization failure. Pixel
+7 runtime detection is currently NOT VERIFIED pending local credentials/models
+and microphone validation. The official Framework module and Core AAR are wired
 into the local Android build. The native view reads Flutter asset lookup keys
 through `AssetManager`, copies the model tree to the app cache while preserving
 relative paths, then loads model3.json and its moc3, textures, physics, idle

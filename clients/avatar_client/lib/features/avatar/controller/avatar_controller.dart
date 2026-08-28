@@ -57,10 +57,11 @@ class AvatarController extends ChangeNotifier {
       if (generation != _presentationGeneration) return;
       reply = chat.reply;
       presentationHint = chat.presentationHint;
-      final audio = await api.synthesize(reply, presentationHint: presentationHint);
-      if (generation != _presentationGeneration) return;
       final plan = reactionPolicy.plan(presentationHint, AvatarState.speaking);
+      final audioFuture = api.synthesize(reply, presentationHint: presentationHint);
       if (plan.preSpeechDelay > Duration.zero) await Future<void>.delayed(plan.preSpeechDelay);
+      if (generation != _presentationGeneration) return;
+      final audio = await audioFuture;
       if (generation != _presentationGeneration) return;
       state = AvatarState.speaking;
       notifyListeners();

@@ -134,3 +134,11 @@ speaker id, language validation, and speed; it does not expose pitch, energy,
 prosody, style, or embedding controls. Semantic presentation metadata may be
 forwarded by clients, but unsupported voice controls are ignored safely and
 the baseline synthesis path is preserved.
+
+### Voice Latency Foundation
+
+STT/TTS preload is opt-in and failure-isolated: startup remains alive and lazy
+loading remains the fallback. Privacy-safe timing is available at STT/TTS
+boundaries. The Flutter reaction lead starts alongside its single TTS request,
+so no serial visual delay is inserted before synthesis. Future streaming can
+extend this boundary without changing safety or authorization behavior.

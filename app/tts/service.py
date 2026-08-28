@@ -40,3 +40,8 @@ class TTSService:
                 logger.warning("tts_provider_failed provider=%s error_type=%s", type(self._provider).__name__, type(exc).__name__)
                 raise TTSProviderError("Speech synthesis is currently unavailable.") from exc
         return result
+
+    async def preload(self) -> None:
+        preload = getattr(self._provider, "preload", None)
+        if preload:
+            await preload()

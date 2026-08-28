@@ -30,6 +30,9 @@ class SherpaOnnxTTSProvider(TTSProvider):
                     self._tts = await asyncio.to_thread(self._load_model)
         return self._tts
 
+    async def preload(self) -> None:
+        await self._get_model()
+
     def _load_model(self):
         try:
             import sherpa_onnx

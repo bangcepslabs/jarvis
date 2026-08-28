@@ -331,3 +331,15 @@ Avatar Runtime Optional: PASS / BASE FALLBACK
 Avatar Compile-time Optional: IMPLEMENTED / BASE BUILD VERIFIED
 Base Android APK without Cubism: PASS
 Live2D Android APK: BLOCKED on this PC (local Cubism SDK absent)
+
+### Voice Latency Foundation
+
+`STT_PRELOAD` and `TTS_PRELOAD` load models only when explicitly enabled;
+preload failures do not stop Core startup. `VOICE_LATENCY_METRICS` exposes
+safe stage durations without transcript, audio, credential, or memory logging.
+Adaptive end-of-speech tuning remains pending because the current Flutter
+client uses recording-file capture rather than a continuous PCM VAD path.
+
+Latency Metrics: IMPLEMENTED / UNIT TESTED
+STT/TTS Preload: IMPLEMENTED / UNIT TESTED
+Adaptive End-of-Speech: PENDING CONTINUOUS PCM VAD PATH

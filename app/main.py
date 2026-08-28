@@ -10,11 +10,23 @@ from app.api.routes.health import router as health_router
 from app.core.config import get_settings
 from app.core.exceptions import JarvisError
 from app.core.logging import configure_logging
+from app.api.dependencies import get_stt_service, get_tts_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    configure_logging(get_settings())
+    settings = get_settings()
+    configure_logging(settings)
+    for enabled, name, factory in ((settings.stt_preload, "stt", get_stt_service), (settings.tts_preload, "tts", get_tts_service)):
+        if enabled:
+            try:
+                await factory().preload()
+                logger.info("voice_model_preloaded component=%s", name)
+            except Exception:
+                logger.warning("voice_model_preload_failed component=%s", name)
     yield
 
 

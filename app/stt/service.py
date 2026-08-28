@@ -36,3 +36,8 @@ class STTService:
         if not result.text.strip():
             return result.model_copy(update={"text": "", "speech_detected": False})
         return result
+
+    async def preload(self) -> None:
+        preload = getattr(self._provider, "preload", None)
+        if preload:
+            await preload()

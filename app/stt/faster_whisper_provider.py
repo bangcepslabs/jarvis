@@ -30,6 +30,9 @@ class FasterWhisperProvider(STTProvider):
                     self._model = await asyncio.to_thread(self._load_model)
         return self._model
 
+    async def preload(self) -> None:
+        await self._get_model()
+
     def _load_model(self):
         try:
             from faster_whisper import WhisperModel

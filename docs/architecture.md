@@ -57,6 +57,11 @@ system instructions, long-term memory, recent conversation, and the current
 user message remain distinct. Tool protocol messages remain request-local and
 PendingAction authorization is never reconstructed from conversation data.
 
+The Android client is split into a Cubism-free `base` flavor and an optional
+`live2d` flavor. Voice, audio, Core API, and placeholder presentation remain in
+the base source set; Cubism Core, Framework, PlatformView registration, and the
+Live2D model implementation are compiled only by the live2d source set.
+
 v0.4.7 adds a Daily Tools branch: `WeatherService` resolves locations through
 `OpenMeteoProvider`, then exposes bounded READ_ONLY current and forecast tools.
 The provider is isolated from tool definitions and translates network/API

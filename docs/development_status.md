@@ -280,3 +280,15 @@ Core Restart Context Recovery: IMPLEMENTED / UNIT TESTED
 PendingAction Persistence: NOT IMPLEMENTED (runtime-only by policy)
 Summary -> Authorization: NOT ALLOWED
 Summary -> Persistent Memory automatic promotion: NOT IMPLEMENTED
+
+### Android Avatar Optionalization
+
+Android native sources are separated into `base` and `live2d` product flavors.
+The base flavor has no Cubism class references or Cubism dependency and uses
+the placeholder renderer. The live2d flavor retains the existing PlatformView,
+model, framing, motion, physics, expression, and lip-sync implementation.
+
+Avatar Runtime Optional: PASS / BASE FALLBACK
+Avatar Compile-time Optional: IMPLEMENTED / BASE BUILD VERIFIED
+Base Android APK without Cubism: PASS
+Live2D Android APK: BLOCKED on this PC (local Cubism SDK absent)

@@ -218,6 +218,25 @@ memory, or tool results. HTTP 429 responses become a safe rate-limit error;
 automatic retry is intentionally not enabled. Context metrics record only
 message/schema sizes and counts.
 
+## Android avatar flavors
+
+The `base` flavor contains the voice client and placeholder avatar without
+Cubism:
+
+```bash
+flutter build apk --debug --flavor base
+```
+
+The `live2d` flavor contains the optional Cubism PlatformView and requires the
+local Cubism Core AAR, Framework, and model assets:
+
+```bash
+flutter build apk --debug --flavor live2d
+```
+
+If a base build receives the Live2D renderer setting, Flutter keeps the
+placeholder renderer instead of calling an unregistered native PlatformView.
+
 ## Avatar Client
 
 `clients/avatar_client` is the independent Flutter visual/voice client (v0.1.0).

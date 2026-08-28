@@ -22,6 +22,10 @@ class AvatarRendererConfig {
       'JARVIS_AVATAR_RENDERER',
       defaultValue: 'placeholder',
     );
+    const flavor = String.fromEnvironment(
+      'FLUTTER_APP_FLAVOR',
+      defaultValue: 'base',
+    );
     const model = String.fromEnvironment(
       'JARVIS_LIVE2D_MODEL_ASSET',
       defaultValue:
@@ -32,7 +36,7 @@ class AvatarRendererConfig {
       defaultValue: 'shuiyin',
     );
     return AvatarRendererConfig(
-      kind: renderer.toLowerCase() == 'live2d'
+      kind: renderer.toLowerCase() == 'live2d' && flavor.toLowerCase() == 'live2d'
           ? AvatarRendererKind.live2d
           : AvatarRendererKind.placeholder,
       modelAsset: model,

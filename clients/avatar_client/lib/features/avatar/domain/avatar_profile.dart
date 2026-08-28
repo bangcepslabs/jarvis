@@ -36,6 +36,6 @@ class AvatarProfile {
 
 class AvatarProfiles {
   static const placeholder = AvatarProfile(id: 'placeholder', displayName: 'JARVIS Placeholder', renderer: 'placeholder', modelAsset: '', supportsExpressions: false, supportsLipSync: false);
-  static const ellenDev = AvatarProfile(id: 'ellen_dev', displayName: 'Ellen Development', renderer: 'live2d', modelAsset: 'assets/avatars/development/ellen_workshop/무료모델艾莲.4096/무료모델艾莲.model3.json');
+  static const ellenDev = AvatarProfile(id: 'ellen_dev', displayName: 'Ellen Development', renderer: 'live2d', modelAsset: 'assets/avatars/development/免费模型艾莲.model3.json');
   static AvatarProfile byId(String id) => id == 'ellen_dev' ? ellenDev : placeholder;
 }

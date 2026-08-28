@@ -67,12 +67,19 @@ class Live2DPlatformView(context: Context, id: Int, messenger: BinaryMessenger, 
     }
 
     private fun extractModelTree(context: Context, modelAsset: String): File {
-        val source = "flutter_assets/" + modelAsset.split('/').joinToString("/") { Uri.encode(it) }
+        // AssetManager addresses Flutter asset paths directly. URL-encoding
+        // Unicode model directory names makes the lookup fail on Android.
+        val source = "flutter_assets/" + modelAsset.split('/').joinToString("/")
         val sourceDir = source.substringBeforeLast('/')
         val destination = File(context.cacheDir, "jarvis-live2d/$sourceDir")
         Log.i("JARVIS_LIVE2D", "asset source=$sourceDir destination=${destination.absolutePath}")
         copyAssetTree(context, sourceDir, destination)
-        return File(destination, modelAsset.substringAfterLast('/'))
+        val modelName = modelAsset.substringAfterLast('/')
+        val extractedModel = destination.walkTopDown().firstOrNull {
+            it.isFile && (it.name == modelName || Uri.decode(it.name) == modelName)
+        } ?: File(destination, modelName)
+        Log.i("JARVIS_LIVE2D", "model path=${extractedModel.absolutePath} exists=${extractedModel.isFile}")
+        return extractedModel
     }
 
     private fun copyAssetTree(context: Context, source: String, destination: File) {

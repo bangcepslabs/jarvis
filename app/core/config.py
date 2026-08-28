@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     stt_model_cache_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_STT_MODEL_DIR", "STT_MODEL_DIR", "STT_MODEL_CACHE_DIR"))
     temp_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_TEMP_DIR", "TEMP_DIR"))
     tts_enabled: bool = False
-    tts_provider: str = "sherpa_onnx"
+    tts_provider: str = "supertonic"
     tts_model: str = "supertonic3"
     tts_model_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_TTS_MODEL_DIR", "TTS_MODEL_DIR"))
     tts_language: str = "ko"
@@ -89,6 +89,9 @@ class Settings(BaseSettings):
     tts_speed: float = 1.0
     tts_preload: bool = Field(False, validation_alias=AliasChoices("TTS_PRELOAD", "JARVIS_TTS_PRELOAD"))
     tts_voice_profile: str = Field("supertonic_default", validation_alias=AliasChoices("JARVIS_VOICE_PROFILE", "VOICE_PROFILE"))
+    gpt_sovits_base_url: str = "http://127.0.0.1:9880"
+    gpt_sovits_timeout_seconds: float = Field(30.0, gt=0)
+    gpt_sovits_fallback_to_supertonic: bool = False
     voice_latency_metrics: bool = Field(False, validation_alias=AliasChoices("VOICE_LATENCY_METRICS", "JARVIS_VOICE_LATENCY_METRICS"))
     auth_enabled: bool = Field(False, validation_alias=AliasChoices("JARVIS_AUTH_ENABLED", "AUTH_ENABLED"))
     client_token: str | None = Field(None, validation_alias=AliasChoices("JARVIS_CLIENT_TOKEN", "CLIENT_TOKEN"))

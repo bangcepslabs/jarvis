@@ -32,7 +32,7 @@ from app.stt.service import STTService
 from app.tts.exceptions import TTSEnabledError
 from app.tts.service import TTSService
 from app.tts.profiles import VoiceProfiles
-from app.tts.sherpa_onnx_provider import SherpaOnnxTTSProvider
+from app.tts.factory import create_tts_provider
 
 
 @lru_cache
@@ -120,10 +120,8 @@ def get_tts_service() -> TTSService:
     settings = get_settings()
     if not settings.tts_enabled:
         raise TTSEnabledError("Speech synthesis is disabled.")
-    if settings.tts_provider.lower() != "sherpa_onnx":
-        raise TTSEnabledError("The configured speech provider is unavailable.")
     return TTSService(
-        SherpaOnnxTTSProvider(settings.tts_model_dir or "", settings.tts_language, settings.tts_num_threads),
+        create_tts_provider(settings),
         max_text_chars=settings.tts_max_text_chars,
         timeout_seconds=settings.tts_timeout_seconds,
         max_concurrent_requests=settings.tts_max_concurrent_requests,

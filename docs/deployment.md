@@ -53,6 +53,18 @@ TTS_PRELOAD=true
 VOICE_LATENCY_METRICS=true
 ```
 
+TTS defaults to the local Supertonic provider. To use a separately deployed
+GPT-SoVITS HTTP service instead, set the following values in the untracked
+`.env.production` file. The service must accept `POST /tts` with a JSON
+`text` field and return WAV bytes. JARVIS does not install GPT-SoVITS itself.
+
+```dotenv
+TTS_PROVIDER=gpt_sovits
+GPT_SOVITS_BASE_URL=http://127.0.0.1:9880
+GPT_SOVITS_TIMEOUT_SECONDS=30
+GPT_SOVITS_FALLBACK_TO_SUPERTONIC=true
+```
+
 For automatic startup, copy `deploy/jarvis-core.service.example` to
 `/etc/systemd/system/jarvis-core.service`, replace `<USER>`, `<GROUP>`, and
 `<PROJECT_DIR>`, then run:

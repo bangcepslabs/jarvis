@@ -9,7 +9,7 @@ from app.stt.faster_whisper_provider import FasterWhisperProvider
 
 
 def test_stt_cpu_threads_defaults_to_ct2_default():
-    assert Settings().stt_cpu_threads == 0
+    assert Settings(_env_file=None).stt_cpu_threads == 0
 
 
 def test_stt_cpu_threads_reads_environment(monkeypatch):

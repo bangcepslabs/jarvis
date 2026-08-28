@@ -171,7 +171,10 @@ class JarvisAgent:
                 candidate = self._tool_registry.get_llm_tool(route.tool_name) if route.tool_name else None
             if self._tool_router:
                 selected_tools = [candidate] if candidate else []
-                tool_choice = {"type": "function", "function": {"name": candidate["function"]["name"]}} if candidate else "none"
+                # The router narrows the available tool set to one candidate.
+                # Let the model emit a valid call instead of forcing a tool
+                # call that Groq may reject as tool_use_failed.
+                tool_choice = "auto" if candidate else "none"
             else:
                 selected_tools = self._tool_registry.get_llm_tools()
                 tool_choice = "auto"

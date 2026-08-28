@@ -64,7 +64,7 @@ async def test_agent_filters_main_call_to_selected_tool() -> None:
     response = await agent.respond("지금 몇 시야?")
     assert response.tool_calls[0].name == "get_current_time"
     assert len(provider.calls[1][0]) == 1
-    assert provider.calls[1][1] == {"type": "function", "function": {"name": "get_current_time"}}
+    assert provider.calls[1][1] == "auto"
     assert provider.calls[2][0] == []
 
 

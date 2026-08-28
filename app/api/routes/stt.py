@@ -1,5 +1,6 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from app.api.auth import require_client_auth
 from app.api.dependencies import get_stt_service
 from app.stt.exceptions import AudioTooLargeError, STTDisabledError, STTProviderError, STTTimeoutError
 from app.stt.service import STTService
@@ -7,7 +8,7 @@ from app.stt.service import STTService
 router = APIRouter(prefix="/api", tags=["stt"])
 
 
-@router.post("/stt/transcribe")
+@router.post("/stt/transcribe", dependencies=[Depends(require_client_auth)])
 async def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
     try:
         service = get_stt_service()

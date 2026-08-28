@@ -1,5 +1,7 @@
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,7 +24,8 @@ class Settings(BaseSettings):
     llm_router_max_completion_tokens: int = 64
     action_confirmation_ttl_seconds: int = 300
     docker_restart_timeout_seconds: int = 10
-    memory_database_path: str = "data/jarvis.db"
+    data_dir: str = Field("data", validation_alias=AliasChoices("JARVIS_DATA_DIR", "DATA_DIR"))
+    memory_database_path: str = Field("data/jarvis.db", validation_alias=AliasChoices("JARVIS_DB_PATH", "MEMORY_DATABASE_PATH"))
     memory_enabled: bool = True
     memory_max_context_items: int = 5
     memory_max_item_chars: int = 500
@@ -69,11 +72,12 @@ class Settings(BaseSettings):
     stt_timeout_seconds: float = 60.0
     stt_max_file_mb: int = 20
     stt_max_concurrent_requests: int = 1
-    stt_model_cache_dir: str | None = None
+    stt_model_cache_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_STT_MODEL_DIR", "STT_MODEL_DIR", "STT_MODEL_CACHE_DIR"))
+    temp_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_TEMP_DIR", "TEMP_DIR"))
     tts_enabled: bool = False
     tts_provider: str = "sherpa_onnx"
     tts_model: str = "supertonic3"
-    tts_model_dir: str | None = None
+    tts_model_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_TTS_MODEL_DIR", "TTS_MODEL_DIR"))
     tts_language: str = "ko"
     tts_device: str = "cpu"
     tts_timeout_seconds: float = 60.0
@@ -81,7 +85,13 @@ class Settings(BaseSettings):
     tts_max_concurrent_requests: int = 1
     tts_num_threads: int = 2
     tts_speed: float = 1.0
+    auth_enabled: bool = Field(False, validation_alias=AliasChoices("JARVIS_AUTH_ENABLED", "AUTH_ENABLED"))
+    client_token: str | None = Field(None, validation_alias=AliasChoices("JARVIS_CLIENT_TOKEN", "CLIENT_TOKEN"))
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    def model_post_init(self, __context: object) -> None:
+        if "memory_database_path" not in self.model_fields_set:
+            self.memory_database_path = str(Path(self.data_dir) / "jarvis.db")
 
 
 @lru_cache

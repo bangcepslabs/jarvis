@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class FasterWhisperProvider(STTProvider):
-    def __init__(self, model: str = "small", device: str = "cpu", compute_type: str = "int8", language: str | None = None, beam_size: int = 1, vad_filter: bool = True, cache_dir: str | None = None) -> None:
+    def __init__(self, model: str = "small", device: str = "cpu", compute_type: str = "int8", language: str | None = None, beam_size: int = 1, vad_filter: bool = True, cache_dir: str | None = None, temp_dir: str | None = None) -> None:
         self._model_name = model
         self._device = device
         self._compute_type = compute_type
@@ -19,6 +19,7 @@ class FasterWhisperProvider(STTProvider):
         self._beam_size = beam_size
         self._vad_filter = vad_filter
         self._cache_dir = cache_dir
+        self._temp_dir = temp_dir
         self._model = None
         self._model_lock = asyncio.Lock()
 
@@ -42,7 +43,9 @@ class FasterWhisperProvider(STTProvider):
     async def transcribe(self, audio: bytes, filename: str | None = None) -> TranscriptionResult:
         suffix = Path(filename or "audio.wav").suffix or ".wav"
         try:
-            with tempfile.NamedTemporaryFile(prefix="jarvis-stt-", suffix=suffix, delete=False) as handle:
+            if self._temp_dir:
+                Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(prefix="jarvis-stt-", suffix=suffix, dir=self._temp_dir, delete=False) as handle:
                 path = Path(handle.name)
                 handle.write(audio)
             try:

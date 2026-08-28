@@ -105,6 +105,7 @@ def get_stt_service() -> STTService:
             beam_size=settings.stt_beam_size,
             vad_filter=settings.stt_vad_filter,
             cache_dir=settings.stt_model_cache_dir,
+            temp_dir=settings.temp_dir,
         ),
         max_file_mb=settings.stt_max_file_mb,
         timeout_seconds=settings.stt_timeout_seconds,

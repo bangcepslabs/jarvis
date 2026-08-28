@@ -36,6 +36,12 @@ def test_text_pipeline_skips_stt_and_forwards_conversation(capsys):
     assert "total_elapsed=" in output
 
 
+def test_client_token_is_attached_to_each_api_request():
+    fake = FakeClient([response(json_data={"reply": "ok"}), response(content=b"RIFFWAV", content_type="audio/wav")])
+    run_pipeline(server="http://core", text="hello", audio=None, conversation_id="c1", client=fake, client_token="secret")
+    assert all(request[2]["headers"] == {"Authorization": "Bearer secret"} for request in fake.requests)
+
+
 def test_input_device_numeric_argument_is_parsed_as_index():
     args = build_parser().parse_args(["--mic", "--input-device", "2"])
     assert args.input_device == 2

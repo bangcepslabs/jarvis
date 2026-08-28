@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
+from app.api.auth import require_client_auth
 from app.api.dependencies import get_tts_service
 from app.schemas.tts import TTSRequest
 from app.tts.exceptions import TTSEnabledError, TTSTextValidationError, TTSTimeoutError, TTSProviderError
@@ -7,7 +8,7 @@ from app.tts.exceptions import TTSEnabledError, TTSTextValidationError, TTSTimeo
 router = APIRouter(prefix="/api", tags=["tts"])
 
 
-@router.post("/tts/synthesize")
+@router.post("/tts/synthesize", dependencies=[Depends(require_client_auth)])
 async def synthesize(request: TTSRequest) -> Response:
     try:
         result = await get_tts_service().synthesize(request.text, request.language, request.speaker, request.speed)

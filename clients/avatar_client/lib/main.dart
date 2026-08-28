@@ -16,7 +16,7 @@ void main() {
       useMaterial3: true,
     ),
     home: AvatarScreen(
-      controller: AvatarController(JarvisApiClient(config.coreBaseUrl)),
+      controller: AvatarController(JarvisApiClient(config.coreBaseUrl, clientToken: config.clientToken)),
       rendererConfig: AvatarRendererConfig.fromEnvironment(),
     ),
   ));

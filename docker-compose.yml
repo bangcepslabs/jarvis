@@ -1,9 +1,25 @@
 services:
   jarvis:
     build: .
+    container_name: jarvis-core
+    restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
       - .env
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      MEMORY_DATABASE_PATH: /app/data/jarvis.db
+      STT_MODEL_CACHE_DIR: /app/data/models/whisper
+      TTS_MODEL_DIR: /app/data/models/tts/supertonic-3
+      TEMP_DIR: /tmp/jarvis
+    volumes:
+      - ${JARVIS_DATA_HOST_PATH:-./data}:/app/data
+      - ${JARVIS_TTS_MODEL_HOST_PATH:-./data/models/tts}:/app/data/models/tts:ro
+      - ${JARVIS_WHISPER_HOST_PATH:-./data/models/whisper}:/app/data/models/whisper
+    tmpfs:
+      - /tmp/jarvis
+    # Docker tools are disabled when the socket is absent. Enable this mount
+    # only when container inspection/restart is explicitly required.
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock

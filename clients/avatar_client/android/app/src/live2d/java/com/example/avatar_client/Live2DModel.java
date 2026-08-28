@@ -5,6 +5,8 @@ import android.util.Log;
 
 import com.live2d.sdk.cubism.framework.CubismFramework;
 import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
+import com.live2d.sdk.cubism.framework.effect.CubismBreath;
+import com.live2d.sdk.cubism.framework.effect.CubismEyeBlink;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
@@ -16,6 +18,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 
@@ -23,7 +27,10 @@ import java.util.Locale;
 final class Live2DModel extends CubismUserModel {
     private final File root;
     private final CubismModelSettingJson setting;
-    private final CubismMotion idleMotion;
+    private final List<CubismMotion> idleMotions = new ArrayList<>();
+    private int idleMotionIndex;
+    private final CubismEyeBlink eyeBlink;
+    private final CubismBreath breath;
     private final Map<String, CubismMotion> motions = new HashMap<>();
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
     private final CubismMatrix44 projectionMatrix = CubismMatrix44.create();
@@ -50,23 +57,32 @@ final class Live2DModel extends CubismUserModel {
                     read(setting.getExpressionFileName(i)));
             if (expression != null) expressions.put(setting.getExpressionName(i), expression);
         }
-        CubismMotion motion = null;
         if (setting.getMotionGroupCount() > 0) {
             String group = setting.getMotionGroupName(0);
             for (int i = 0; i < setting.getMotionCount(group); i++) {
                 CubismMotion loaded = loadMotion(read(setting.getMotionFileName(group, i)));
-                if (loaded != null) motions.put(group.toLowerCase(Locale.ROOT) + ":" + i, loaded);
-                if (motion == null) motion = loaded;
+                if (loaded != null) {
+                    motions.put(group.toLowerCase(Locale.ROOT) + ":" + i, loaded);
+                    idleMotions.add(loaded);
+                }
             }
         }
-        idleMotion = motion;
+        for (CubismMotion motion : idleMotions) motion.setLoop(idleMotions.size() == 1);
+        eyeBlink = CubismEyeBlink.create(setting);
+        breath = CubismBreath.create();
+        configureBreath();
     }
 
     void initializeRenderer(int width, int height) {
         CubismRendererAndroid renderer = (CubismRendererAndroid) CubismRendererAndroid.create(width, height);
         setupRenderer(renderer, 1);
         updateViewport(width, height);
-        if (idleMotion != null) motionManager.startMotionPriority(idleMotion, 1);
+        if (!idleMotions.isEmpty()) motionManager.startMotionPriority(idleMotions.get(0), 1);
+        Log.i("JARVIS_LIVE2D", "idleLoop=" + !idleMotions.isEmpty() +
+                " idleMotions=" + idleMotions.size() +
+                " eyeBlinkParams=" + eyeBlink.getParameterIds().size() +
+                " breathParams=" + breath.getParameters().size() +
+                " physics=" + (physics != null));
     }
 
     void updateViewport(int width, int height) {
@@ -114,9 +130,54 @@ final class Live2DModel extends CubismUserModel {
     void update(float deltaSeconds) {
         if (getModel() == null) return;
         motionManager.updateMotion(getModel(), deltaSeconds);
+        if (idleMotions.size() > 1 && motionManager.isFinished()) {
+            idleMotionIndex = (idleMotionIndex + 1) % idleMotions.size();
+            motionManager.startMotionPriority(idleMotions.get(idleMotionIndex), 1);
+            Log.i("JARVIS_LIVE2D", "idle motion loop restart index=" + idleMotionIndex);
+        }
         expressionManager.updateMotion(getModel(), deltaSeconds);
+        eyeBlink.updateParameters(getModel(), deltaSeconds);
+        breath.updateParameters(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
         getModel().update();
+    }
+
+    String debugAnimationSummary() {
+        return "idleMotions=" + idleMotions.size() +
+                " motionFinished=" + motionManager.isFinished() +
+                " eyeBlinkParams=" + eyeBlink.getParameterIds().size() +
+                " breathParams=" + breath.getParameters().size() +
+                " physics=" + (physics != null);
+    }
+
+    private void configureBreath() {
+        final List<CubismBreath.BreathParameterData> parameters = new ArrayList<>();
+        addBreathParameter(parameters, "ParamAngleX", 0.0f, 0.35f, 6.0f, 0.18f);
+        addBreathParameter(parameters, "ParamAngleY", 0.0f, 0.20f, 7.0f, 0.12f);
+        addBreathParameter(parameters, "ParamBodyAngleX", 0.0f, 0.25f, 6.5f, 0.15f);
+        addBreathParameter(parameters, "ParamBreath", 0.0f, 0.50f, 3.0f, 0.35f);
+        breath.setParameters(parameters);
+    }
+
+    private void addBreathParameter(
+            List<CubismBreath.BreathParameterData> parameters,
+            String id,
+            float offset,
+            float peak,
+            float cycle,
+            float weight) {
+        CubismId parameterId = findParameterId(id);
+        if (parameterId != null) {
+            parameters.add(new CubismBreath.BreathParameterData(parameterId, offset, peak, cycle, weight));
+        }
+    }
+
+    private CubismId findParameterId(String id) {
+        for (int i = 0; i < getModel().getParameterCount(); i++) {
+            CubismId parameterId = getModel().getParameterId(i);
+            if (id.equals(parameterId.getString())) return parameterId;
+        }
+        return null;
     }
 
     boolean applyExpression(String name) {

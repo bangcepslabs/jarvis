@@ -132,6 +132,8 @@ private class Live2DRenderer(
     private var model: Live2DModel? = null
     private var textureIds = IntArray(0)
     private var lastNanos = 0L
+    private var frameCounter = 0L
+    private var lastDiagnosticsNanos = 0L
     @Volatile private var pendingUpdate: Map<String, Any?>? = null
     var failure: String? = null
 
@@ -204,8 +206,18 @@ private class Live2DRenderer(
         val now = System.nanoTime()
         val delta = if (lastNanos == 0L) 1f / 60f else ((now - lastNanos) / 1_000_000_000f).coerceAtMost(0.1f)
         lastNanos = now
-        model?.update(delta)
-        model?.draw()
+        frameCounter++
+        val currentModel = model
+        currentModel?.update(delta)
+        currentModel?.draw()
+        if (now - lastDiagnosticsNanos >= 2_000_000_000L) {
+            lastDiagnosticsNanos = now
+            Log.i(
+                "JARVIS_LIVE2D",
+                "frame=$frameCounter delta=$delta " +
+                    (currentModel?.debugAnimationSummary() ?: "model=null"),
+            )
+        }
     }
 
     fun release() {

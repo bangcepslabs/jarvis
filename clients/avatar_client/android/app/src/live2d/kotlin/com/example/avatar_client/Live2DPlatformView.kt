@@ -11,6 +11,8 @@ import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicLong
 import io.flutter.plugin.common.StandardMessageCodec
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -133,12 +135,24 @@ private class Live2DRenderer(
     private var textureIds = IntArray(0)
     private var lastNanos = 0L
     private var frameCounter = 0L
-    private var lastDiagnosticsNanos = 0L
+    private var diagnosticsWindowStartNanos = 0L
+    private var diagnosticsFrames = 0L
+    private var diagnosticsDeltaNanos = 0L
+    private var diagnosticsMaxDeltaNanos = 0L
+    private var diagnosticsUpdateNanos = 0L
+    private var diagnosticsDrawNanos = 0L
+    private var diagnosticsMaxUpdateNanos = 0L
+    private var diagnosticsMaxDrawNanos = 0L
+    private var diagnosticsSlowFrames = 0L
+    private val runtimeUpdateCount = AtomicLong(0)
+    private val mouthUpdateCount = AtomicLong(0)
     @Volatile private var pendingUpdate: Map<String, Any?>? = null
     var failure: String? = null
 
     fun setPendingUpdate(params: Map<*, *>) {
         pendingUpdate = params.entries.associate { it.key.toString() to it.value }
+        runtimeUpdateCount.incrementAndGet()
+        if (params.containsKey("mouthOpen")) mouthUpdateCount.incrementAndGet()
     }
 
     fun applyPendingUpdate() {
@@ -204,19 +218,70 @@ private class Live2DRenderer(
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
         val now = System.nanoTime()
-        val delta = if (lastNanos == 0L) 1f / 60f else ((now - lastNanos) / 1_000_000_000f).coerceAtMost(0.1f)
+        val rawDeltaNanos = if (lastNanos == 0L) 1_000_000_000L / 60L else now - lastNanos
+        val rawDeltaSeconds = rawDeltaNanos / 1_000_000_000f
+        val delta = rawDeltaSeconds.coerceAtMost(0.1f)
         lastNanos = now
         frameCounter++
+        if (diagnosticsWindowStartNanos == 0L) diagnosticsWindowStartNanos = now
+        diagnosticsFrames++
+        diagnosticsDeltaNanos += rawDeltaNanos
+        diagnosticsMaxDeltaNanos = maxOf(diagnosticsMaxDeltaNanos, rawDeltaNanos)
+        if (rawDeltaNanos > 33_333_333L) diagnosticsSlowFrames++
         val currentModel = model
+        val updateStartedNanos = System.nanoTime()
         currentModel?.update(delta)
+        val updateElapsedNanos = System.nanoTime() - updateStartedNanos
+        diagnosticsUpdateNanos += updateElapsedNanos
+        diagnosticsMaxUpdateNanos = maxOf(diagnosticsMaxUpdateNanos, updateElapsedNanos)
+        val drawStartedNanos = System.nanoTime()
         currentModel?.draw()
-        if (now - lastDiagnosticsNanos >= 2_000_000_000L) {
-            lastDiagnosticsNanos = now
+        val drawElapsedNanos = System.nanoTime() - drawStartedNanos
+        diagnosticsDrawNanos += drawElapsedNanos
+        diagnosticsMaxDrawNanos = maxOf(diagnosticsMaxDrawNanos, drawElapsedNanos)
+        val diagnosticsElapsedNanos = now - diagnosticsWindowStartNanos
+        if (diagnosticsElapsedNanos >= 2_000_000_000L) {
+            val elapsedSeconds = diagnosticsElapsedNanos / 1_000_000_000.0
+            val fps = diagnosticsFrames / elapsedSeconds
+            val averageDeltaMs = diagnosticsDeltaNanos / diagnosticsFrames / 1_000_000.0
+            val maxDeltaMs = diagnosticsMaxDeltaNanos / 1_000_000.0
+            val averageUpdateMs = diagnosticsUpdateNanos / diagnosticsFrames / 1_000_000.0
+            val averageDrawMs = diagnosticsDrawNanos / diagnosticsFrames / 1_000_000.0
+            val maxUpdateMs = diagnosticsMaxUpdateNanos / 1_000_000.0
+            val maxDrawMs = diagnosticsMaxDrawNanos / 1_000_000.0
+            val runtimeUpdates = runtimeUpdateCount.getAndSet(0)
+            val mouthUpdates = mouthUpdateCount.getAndSet(0)
             Log.i(
                 "JARVIS_LIVE2D",
-                "frame=$frameCounter delta=$delta " +
+                String.format(
+                    Locale.US,
+                    "fps=%.1f avgDeltaMs=%.1f maxDeltaMs=%.1f " +
+                        "updateMs=%.1f(max=%.1f) drawMs=%.1f(max=%.1f) slowFrames=%d " +
+                        "runtimeUpdates=%d mouthUpdates=%d frame=%d delta=%.3f ",
+                    fps,
+                    averageDeltaMs,
+                    maxDeltaMs,
+                    averageUpdateMs,
+                    maxUpdateMs,
+                    averageDrawMs,
+                    maxDrawMs,
+                    diagnosticsSlowFrames,
+                    runtimeUpdates,
+                    mouthUpdates,
+                    frameCounter,
+                    delta,
+                ) +
                     (currentModel?.debugAnimationSummary() ?: "model=null"),
             )
+            diagnosticsWindowStartNanos = now
+            diagnosticsFrames = 0L
+            diagnosticsDeltaNanos = 0L
+            diagnosticsMaxDeltaNanos = 0L
+            diagnosticsUpdateNanos = 0L
+            diagnosticsDrawNanos = 0L
+            diagnosticsMaxUpdateNanos = 0L
+            diagnosticsMaxDrawNanos = 0L
+            diagnosticsSlowFrames = 0L
         }
     }
 

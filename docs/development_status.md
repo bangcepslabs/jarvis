@@ -294,6 +294,19 @@ than persistent memory, and memory/Persona/context never grant authorization.
 Natural Conversation Personalization: IMPLEMENTED / UNIT TESTED
 Vector database, embeddings, and model fine-tuning: NOT IMPLEMENTED
 
+### Avatar Profile and Reaction Foundation
+
+`AvatarProfile` now isolates model-specific configuration from the shared
+semantic presentation layer. Placeholder and Ellen development profiles are
+registered with safe fallback behavior; Ellen expression mappings remain empty
+until visually verified. Ambient motion, reaction motion, framing, mouth
+parameters, and renderer capabilities have separate profile fields. Existing
+Live2D projection, physics, idle, and lip-sync implementation is unchanged.
+
+AvatarProfile: IMPLEMENTED / UNIT TESTED
+Automatic expression mapping: DISABLED UNTIL VERIFIED
+Reaction motion mapping: FOUNDATION / NO VERIFIED MOTIONS
+
 ### Android Avatar Optionalization
 
 Android native sources are separated into `base` and `live2d` product flavors.

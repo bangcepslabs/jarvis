@@ -115,3 +115,13 @@ voice clients send `voice` so responses are short and conclusion-first. SQLite
 memory retrieval remains bounded and local: keyword overlap, memory key and
 category matches, recency, and source are used for ranking. Current conversation
 context is higher priority than long-term memory; neither can authorize tools.
+
+### Avatar Model Abstraction
+
+`AvatarProfile` owns model-specific asset, framing, parameter names, mouth range,
+ambient motion groups, capability flags, and verified semantic mappings. The
+shared controller and presentation hint use semantic values only. Unknown
+profiles fall back to the harmless placeholder profile, and unverified or
+excluded expressions (including `shuiyin`) are never selected automatically.
+Viewport/aspect correction remains a renderer concern; model framing remains a
+profile concern.

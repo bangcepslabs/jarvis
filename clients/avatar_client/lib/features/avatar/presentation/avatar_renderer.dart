@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 
 import '../domain/avatar_state.dart';
 import '../domain/avatar_presentation_hint.dart';
+import '../domain/avatar_profile.dart';
 
 enum AvatarRendererKind { placeholder, live2d }
 
@@ -12,11 +13,13 @@ class AvatarRendererConfig {
     required this.kind,
     required this.modelAsset,
     required this.expression,
+    this.profile = AvatarProfiles.placeholder,
   });
 
   final AvatarRendererKind kind;
   final String modelAsset;
   final String expression;
+  final AvatarProfile profile;
 
   factory AvatarRendererConfig.fromEnvironment() {
     const renderer = String.fromEnvironment(
@@ -30,18 +33,21 @@ class AvatarRendererConfig {
     const model = String.fromEnvironment(
       'JARVIS_LIVE2D_MODEL_ASSET',
       defaultValue:
-          'assets/avatars/development/ellen_workshop/免费模型艾莲.model3.json',
+          '',
     );
     const expression = String.fromEnvironment(
       'JARVIS_LIVE2D_EXPRESSION',
-      defaultValue: 'shuiyin',
+      defaultValue: '',
     );
+    final configuredProfile = const String.fromEnvironment('JARVIS_AVATAR_PROFILE', defaultValue: 'placeholder');
+    final profile = AvatarProfiles.byId(configuredProfile == 'placeholder' && renderer.toLowerCase() == 'live2d' ? 'ellen_dev' : configuredProfile);
     return AvatarRendererConfig(
       kind: renderer.toLowerCase() == 'live2d' && flavor.toLowerCase() == 'live2d'
           ? AvatarRendererKind.live2d
           : AvatarRendererKind.placeholder,
-      modelAsset: model,
+      modelAsset: model.isEmpty ? profile.modelAsset : model,
       expression: expression,
+      profile: profile,
     );
   }
 }
@@ -103,9 +109,14 @@ class Live2DAvatarRenderer implements AvatarRenderer {
       viewType: 'jarvis/live2d',
       creationParams: {
         'modelAsset': config.modelAsset,
-        'motion': 'idle',
+        'motion': config.profile.ambientMotions.isEmpty ? 'idle' : config.profile.ambientMotions.first,
         'state': state.name,
-        'expression': config.expression,
+        'expression': config.expression.isNotEmpty ? config.expression : (config.profile.expressionFor(hint.emotion) ?? ''),
+        'mouthOpenParameter': config.profile.mouthOpenParameter,
+        'mouthFormParameter': config.profile.mouthFormParameter,
+        'mouthMin': config.profile.mouthMin,
+        'mouthMax': config.profile.mouthMax,
+        'mouthGain': config.profile.mouthGain,
         'emotion': hint.emotion.name,
         'intensity': hint.intensity,
         'motionIntent': hint.motionIntent.name,

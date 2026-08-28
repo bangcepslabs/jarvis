@@ -51,7 +51,7 @@ class AvatarController extends ChangeNotifier {
       final chat = await api.chat(text, conversationId, responseMode: typed == null ? 'voice' : 'text');
       reply = chat.reply;
       presentationHint = chat.presentationHint;
-      final audio = await api.synthesize(reply);
+      final audio = await api.synthesize(reply, presentationHint: presentationHint);
       state = AvatarState.speaking;
       notifyListeners();
       await _player.play(BytesSource(audio));

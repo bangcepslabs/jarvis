@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     tts_max_concurrent_requests: int = 1
     tts_num_threads: int = 2
     tts_speed: float = 1.0
+    tts_voice_profile: str = Field("supertonic_default", validation_alias=AliasChoices("JARVIS_VOICE_PROFILE", "VOICE_PROFILE"))
     auth_enabled: bool = Field(False, validation_alias=AliasChoices("JARVIS_AUTH_ENABLED", "AUTH_ENABLED"))
     client_token: str | None = Field(None, validation_alias=AliasChoices("JARVIS_CLIENT_TOKEN", "CLIENT_TOKEN"))
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

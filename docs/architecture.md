@@ -125,3 +125,12 @@ profiles fall back to the harmless placeholder profile, and unverified or
 excluded expressions (including `shuiyin`) are never selected automatically.
 Viewport/aspect correction remains a renderer concern; model framing remains a
 profile concern.
+
+### Voice Profile and TTS Boundary
+
+`VoiceProfile` is server-side TTS configuration, separate from Persona and
+AvatarProfile. The inspected Supertonic wrapper calls sherpa-onnx with model,
+speaker id, language validation, and speed; it does not expose pitch, energy,
+prosody, style, or embedding controls. Semantic presentation metadata may be
+forwarded by clients, but unsupported voice controls are ignored safely and
+the baseline synthesis path is preserved.

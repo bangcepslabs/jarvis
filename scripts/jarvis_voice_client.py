@@ -117,7 +117,10 @@ def run_pipeline(
             raise RuntimeError("chat returned an empty reply")
         print(f"JARVIS: {reply}")
         stage_started = time.perf_counter()
-        tts = _request(client, "POST", _url(server, "/api/tts/synthesize"), headers=headers, json={"text": reply, "language": "ko"})
+        tts_payload = {"text": reply, "language": "ko"}
+        if isinstance(chat.get("presentation_hint"), dict):
+            tts_payload["presentation_hint"] = chat["presentation_hint"]
+        tts = _request(client, "POST", _url(server, "/api/tts/synthesize"), headers=headers, json=tts_payload)
         tts_elapsed = time.perf_counter() - stage_started
         if not tts.headers.get("content-type", "").startswith("audio/wav"):
             raise RuntimeError("TTS returned a non-WAV response")

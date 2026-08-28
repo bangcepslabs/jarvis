@@ -307,6 +307,19 @@ AvatarProfile: IMPLEMENTED / UNIT TESTED
 Automatic expression mapping: DISABLED UNTIL VERIFIED
 Reaction motion mapping: FOUNDATION / NO VERIFIED MOTIONS
 
+### Voice Profile and Supertonic Capability Boundary
+
+`VoiceProfile` and a default `supertonic_default` registry entry now separate
+semantic presentation from TTS engine configuration. The current sherpa-onnx
+Supertonic wrapper supports configured language, speaker selection, and speed;
+pitch, energy, style, prosody, and embeddings are recorded as unsupported.
+Clients may send semantic presentation metadata to TTS, but unsupported styling
+falls back to the existing Supertonic synthesis behavior.
+
+VoiceProfile: IMPLEMENTED / UNIT TESTED
+Supertonic capability discovery: VERIFIED FROM WRAPPER
+Emotion-aware voice rendering: FOUNDATION / CAPABILITY-LIMITED
+
 ### Android Avatar Optionalization
 
 Android native sources are separated into `base` and `live2d` product flavors.

@@ -12,6 +12,8 @@ class AvatarPresentationHint {
   final double intensity;
   final AvatarMotionIntent motionIntent;
 
+  Map<String, Object> toJson() => {'emotion': emotion.name, 'intensity': intensity, 'motion_intent': motionIntent.name};
+
   factory AvatarPresentationHint.fromJson(Object? value) {
     if (value is! Map) return const AvatarPresentationHint();
     final emotionMatches = AvatarEmotion.values.where((item) => item.name == value['emotion']);

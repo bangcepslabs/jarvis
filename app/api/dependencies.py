@@ -31,6 +31,7 @@ from app.stt.faster_whisper_provider import FasterWhisperProvider
 from app.stt.service import STTService
 from app.tts.exceptions import TTSEnabledError
 from app.tts.service import TTSService
+from app.tts.profiles import VoiceProfiles
 from app.tts.sherpa_onnx_provider import SherpaOnnxTTSProvider
 
 
@@ -125,4 +126,5 @@ def get_tts_service() -> TTSService:
         max_text_chars=settings.tts_max_text_chars,
         timeout_seconds=settings.tts_timeout_seconds,
         max_concurrent_requests=settings.tts_max_concurrent_requests,
+        voice_profile=VoiceProfiles.by_id(settings.tts_voice_profile),
     )

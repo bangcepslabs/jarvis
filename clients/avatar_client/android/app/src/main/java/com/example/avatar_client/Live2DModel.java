@@ -11,6 +11,7 @@ import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
 import com.live2d.sdk.cubism.framework.id.CubismId;
+import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
 import java.io.File;
 import java.io.IOException;
@@ -33,6 +34,8 @@ final class Live2DModel extends CubismUserModel {
     private final int mouthParameterIndex;
     private final float mouthParameterMax = 2.1f;
     private final float mouthGain;
+    private final CubismMatrix44 projectionMatrix = CubismMatrix44.create();
+    private final CubismMatrix44 mvpMatrix = CubismMatrix44.create();
     private volatile float mouthOpen;
 
     Live2DModel(File root, File model3Json, float mouthGain) throws IOException {
@@ -76,13 +79,32 @@ final class Live2DModel extends CubismUserModel {
         if (getRenderer() == null || width <= 0 || height <= 0) return;
         setRenderTargetSize(width, height);
         getModelMatrix().loadIdentity();
-        // Medium shot: enlarge the model and place the face slightly above
-        // center, allowing the lower legs to fall outside the viewport.
-        // Slightly relax the medium-long shot so both the head and lower
-        // overlay area have breathing room without returning to full body.
-        getModelMatrix().setHeight(3.55f);
-        getModelMatrix().setY(-0.55f);
-        getRenderer().setMvpMatrix(getModelMatrix());
+        // Keep presentation framing independent from viewport aspect correction.
+        getModelMatrix().setHeight(2.95f);
+        getModelMatrix().setY(-0.30f);
+
+        // Keep model framing uniform. The viewport maps clip-space X/Y to
+        // different physical pixel scales on a portrait surface, so correct
+        // that in a separate projection matrix instead of distorting the
+        // model matrix itself.
+        float viewportAspect = (float) width / (float) height;
+        float projectionScaleX = viewportAspect < 1.0f ? 1.0f / viewportAspect : 1.0f;
+        float projectionScaleY = viewportAspect > 1.0f ? viewportAspect : 1.0f;
+        projectionMatrix.loadIdentity();
+        projectionMatrix.scale(projectionScaleX, projectionScaleY);
+        mvpMatrix.setMatrix(projectionMatrix);
+        mvpMatrix.multiplyByMatrix(getModelMatrix());
+        getRenderer().setMvpMatrix(mvpMatrix);
+        Log.i("JARVIS_LIVE2D", "viewport=" + width + "x" + height +
+                " viewportAspect=" + viewportAspect +
+                " canvas=" + getModel().getCanvasWidth() + "x" + getModel().getCanvasHeight() +
+                " canvasAspect=" + ((float) getModel().getCanvasWidth() / getModel().getCanvasHeight()) +
+                " modelScaleX=" + getModelMatrix().getScaleX() +
+                " modelScaleY=" + getModelMatrix().getScaleY() +
+                " projectionScaleX=" + projectionScaleX +
+                " projectionScaleY=" + projectionScaleY +
+                " uniformModelScale=" +
+                (getModelMatrix().getScaleX() == getModelMatrix().getScaleY()));
     }
 
     int textureCount() { return setting.getTextureCount(); }

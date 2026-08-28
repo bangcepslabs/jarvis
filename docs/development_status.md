@@ -377,3 +377,11 @@ context selection, budgets, routing, authorization, or safety behavior.
 LLM Prompt Calibration: IMPLEMENTED / UNIT TESTED
 Adaptive budget changes: NOT IMPLEMENTED (measure only)
 Raw prompt/memory/tool result logging: NOT ALLOWED
+
+### Live2D Aspect Ratio
+
+Live2D model framing remains uniform and viewport aspect correction is applied
+through a separate projection matrix. Diagnostic viewport, canvas, scale, and
+projection values are logged only during initialization or resize.
+
+Live2D Aspect Ratio: IMPLEMENTED / NOT RUNTIME VERIFIED

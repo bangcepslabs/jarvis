@@ -12,6 +12,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import io.flutter.plugin.common.StandardMessageCodec
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.platform.PlatformView
 import io.flutter.plugin.platform.PlatformViewFactory
 import java.io.File
@@ -20,14 +23,15 @@ import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid
 
-class Live2DPlatformViewFactory(private val context: Context, codec: StandardMessageCodec) : PlatformViewFactory(codec) {
+class Live2DPlatformViewFactory(private val messenger: BinaryMessenger, codec: StandardMessageCodec) : PlatformViewFactory(codec) {
     override fun create(context: Context, id: Int, args: Any?): PlatformView =
-        Live2DPlatformView(context, args as? Map<*, *>)
+        Live2DPlatformView(context, id, messenger, args as? Map<*, *>)
 }
 
-class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
+class Live2DPlatformView(context: Context, id: Int, messenger: BinaryMessenger, params: Map<*, *>?) : PlatformView, MethodChannel.MethodCallHandler {
     private val view: Live2DGlView
     private val container: FrameLayout
+    private val channel = MethodChannel(messenger, "jarvis/live2d/$id")
 
     init {
         view = try {
@@ -43,10 +47,24 @@ class Live2DPlatformView(context: Context, params: Map<*, *>?) : PlatformView {
             setBackgroundColor(Color.rgb(10, 28, 46))
             addView(view, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
+        channel.setMethodCallHandler(this)
+        if (params != null) view.update(params)
     }
 
     override fun getView(): View = container
-    override fun dispose() { view.release() }
+    override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+        if (call.method != "update" || call.arguments !is Map<*, *>) {
+            result.notImplemented()
+            return
+        }
+        view.update(call.arguments as Map<*, *>)
+        result.success(null)
+    }
+
+    override fun dispose() {
+        channel.setMethodCallHandler(null)
+        view.release()
+    }
 
     private fun extractModelTree(context: Context, modelAsset: String): File {
         val source = "flutter_assets/" + modelAsset.split('/').joinToString("/") { Uri.encode(it) }
@@ -91,6 +109,11 @@ private class Live2DGlView(context: Context, private val root: File?, private va
         queueEvent { liveRenderer.release() }
         onPause()
     }
+
+    fun update(params: Map<*, *>) {
+        liveRenderer.setPendingUpdate(params)
+        queueEvent { liveRenderer.applyPendingUpdate() }
+    }
 }
 
 private class Live2DRenderer(
@@ -102,14 +125,40 @@ private class Live2DRenderer(
     private var model: Live2DModel? = null
     private var textureIds = IntArray(0)
     private var lastNanos = 0L
+    @Volatile private var pendingUpdate: Map<String, Any?>? = null
     var failure: String? = null
+
+    fun setPendingUpdate(params: Map<*, *>) {
+        pendingUpdate = params.entries.associate { it.key.toString() to it.value }
+    }
+
+    fun applyPendingUpdate() {
+        val target = model ?: return
+        val update = pendingUpdate ?: return
+        target.applyRuntimeUpdate(
+            update.string("state", "idle"),
+            update.string("expression", ""),
+            update.string("motion", ""),
+            update.number("intensity", 0.3f),
+        )
+        target.setMouthOpen(update.number("mouthOpen", 0f))
+        pendingUpdate = null
+    }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         GLES20.glClearColor(0.06f, 0.17f, 0.26f, 1f)
         if (root == null || modelFile == null) return
         try {
             Live2DModel.initializeFramework(assets)
-            model = Live2DModel(root, modelFile)
+            val initial = pendingUpdate
+            model = Live2DModel(
+                root,
+                modelFile,
+                initial.string("mouthOpenParameter", "ParamMouthOpenY"),
+                initial.number("mouthMin", 0f),
+                initial.number("mouthMax", 1f),
+                initial.number("mouthGain", 1f),
+            )
             if (expression.isNotEmpty()) {
                 val applied = model!!.applyExpression(expression)
                 Log.i("JARVIS_LIVE2D", "expression=$expression applied=$applied")
@@ -129,6 +178,7 @@ private class Live2DRenderer(
                 bitmap.recycle()
                 cubism.bindTexture(i, textureIds[i])
             }
+            applyPendingUpdate()
             lastNanos = System.nanoTime()
         } catch (error: Exception) {
             failure = error.message ?: error.javaClass.simpleName
@@ -157,3 +207,9 @@ private class Live2DRenderer(
         if (textureIds.isNotEmpty()) GLES20.glDeleteTextures(textureIds.size, textureIds, 0)
     }
 }
+
+private fun Map<String, Any?>?.string(key: String, fallback: String): String =
+    (this?.get(key) as? String) ?: fallback
+
+private fun Map<String, Any?>?.number(key: String, fallback: Float): Float =
+    (this?.get(key) as? Number)?.toFloat() ?: fallback

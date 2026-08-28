@@ -44,11 +44,15 @@ class _AvatarScreenState extends State<AvatarScreen> {
         fit: StackFit.expand,
         children: [
           Positioned.fill(
-            child: AvatarRendererHost(
-              config: widget.rendererConfig,
-              state: state,
-              size: double.infinity,
-              presentationHint: controller.presentationHint,
+            child: ValueListenableBuilder<double>(
+              valueListenable: controller.mouthOpen,
+              builder: (context, mouthOpen, child) => AvatarRendererHost(
+                config: widget.rendererConfig,
+                state: state,
+                size: double.infinity,
+                presentationHint: controller.presentationHint,
+                mouthOpen: mouthOpen,
+              ),
             ),
           ),
           SafeArea(

@@ -8,6 +8,7 @@ import com.live2d.sdk.cubism.framework.CubismModelSettingJson;
 import com.live2d.sdk.cubism.framework.model.CubismUserModel;
 import com.live2d.sdk.cubism.framework.motion.CubismMotion;
 import com.live2d.sdk.cubism.framework.motion.CubismExpressionMotion;
+import com.live2d.sdk.cubism.framework.id.CubismId;
 import com.live2d.sdk.cubism.framework.math.CubismMatrix44;
 import com.live2d.sdk.cubism.framework.rendering.android.CubismRendererAndroid;
 import java.io.File;
@@ -16,20 +17,33 @@ import java.nio.file.Files;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Locale;
 
 /** App-owned adapter around the official Cubism Java Framework. */
 final class Live2DModel extends CubismUserModel {
     private final File root;
     private final CubismModelSettingJson setting;
     private final CubismMotion idleMotion;
+    private final Map<String, CubismMotion> motions = new HashMap<>();
     private final Map<String, CubismExpressionMotion> expressions = new HashMap<>();
     private final CubismMatrix44 projectionMatrix = CubismMatrix44.create();
     private final CubismMatrix44 mvpMatrix = CubismMatrix44.create();
+    private final CubismId mouthParameterId;
+    private final float mouthMin;
+    private final float mouthMax;
+    private final float mouthGain;
+    private String lastExpression = "";
+    private String lastMotion = "";
+    private String lastState = "";
 
-    Live2DModel(File root, File model3Json) throws IOException {
+    Live2DModel(File root, File model3Json, String mouthParameterName, float mouthMin, float mouthMax, float mouthGain) throws IOException {
         this.root = root;
         setting = new CubismModelSettingJson(Files.readAllBytes(model3Json.toPath()));
         loadModel(read(setting.getModelFileName()));
+        mouthParameterId = CubismFramework.getIdManager().getId(mouthParameterName);
+        this.mouthMin = mouthMin;
+        this.mouthMax = mouthMax;
+        this.mouthGain = mouthGain;
         if (!setting.getPhysicsFileName().isEmpty()) loadPhysics(read(setting.getPhysicsFileName()));
         for (int i = 0; i < setting.getExpressionCount(); i++) {
             CubismExpressionMotion expression = loadExpression(
@@ -39,7 +53,11 @@ final class Live2DModel extends CubismUserModel {
         CubismMotion motion = null;
         if (setting.getMotionGroupCount() > 0) {
             String group = setting.getMotionGroupName(0);
-            if (setting.getMotionCount(group) > 0) motion = loadMotion(read(setting.getMotionFileName(group, 0)));
+            for (int i = 0; i < setting.getMotionCount(group); i++) {
+                CubismMotion loaded = loadMotion(read(setting.getMotionFileName(group, i)));
+                if (loaded != null) motions.put(group.toLowerCase(Locale.ROOT) + ":" + i, loaded);
+                if (motion == null) motion = loaded;
+            }
         }
         idleMotion = motion;
     }
@@ -102,6 +120,53 @@ final class Live2DModel extends CubismUserModel {
         CubismExpressionMotion expression = expressions.get(name);
         if (expression == null) return false;
         return expressionManager.startMotionPriority(expression, 1) >= 0;
+    }
+
+    void applyRuntimeUpdate(String state, String expression, String motion, float intensity) {
+        if (state == null) state = "idle";
+        if (!state.equals(lastState)) {
+            Log.i("JARVIS_LIVE2D", "state changed=" + state);
+            lastState = state;
+        }
+        if (!expression.equals(lastExpression)) {
+            if (expression.isEmpty()) {
+                Log.i("JARVIS_LIVE2D", "expression skipped=empty");
+            } else if (applyExpression(expression)) {
+                Log.i("JARVIS_LIVE2D", "expression applied=" + expression + " intensity=" + intensity);
+            } else {
+                Log.i("JARVIS_LIVE2D", "expression skipped=" + expression);
+            }
+            lastExpression = expression;
+        }
+        if (!motion.equals(lastMotion)) {
+            CubismMotion selected = findMotion(motion);
+            if (selected == null) {
+                Log.i("JARVIS_LIVE2D", "motion skipped=" + motion);
+            } else {
+                motionManager.startMotionPriority(selected, 1);
+                Log.i("JARVIS_LIVE2D", "motion applied=" + motion);
+            }
+            lastMotion = motion;
+        }
+    }
+
+    void setMouthOpen(float value) {
+        float clamped = Math.max(mouthMin, Math.min(mouthMax, value * mouthGain));
+        int parameterIndex = getModel().getParameterIndex(mouthParameterId);
+        if (parameterIndex >= getModel().getParameterCount()) {
+            Log.i("JARVIS_LIVE2D", "mouth skipped=" + mouthParameterId.getString());
+            return;
+        }
+        getModel().setParameterValue(mouthParameterId, clamped);
+    }
+
+    private CubismMotion findMotion(String name) {
+        if (name == null || name.isEmpty()) return null;
+        String normalized = name.toLowerCase(Locale.ROOT);
+        for (Map.Entry<String, CubismMotion> entry : motions.entrySet()) {
+            if (entry.getKey().startsWith(normalized + ":")) return entry.getValue();
+        }
+        return null;
     }
 
     void removeExpression(String name) {

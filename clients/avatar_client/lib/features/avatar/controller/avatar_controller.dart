@@ -6,12 +6,18 @@ import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
 import '../domain/avatar_presentation_hint.dart';
 import '../domain/character_reaction_policy.dart';
+import '../lip_sync/lip_sync_analyzer.dart';
+import '../lip_sync/lip_sync_playback_controller.dart';
 
 class AvatarController extends ChangeNotifier {
-  AvatarController(this.api);
+  AvatarController(this.api) {
+    _lipSync = LipSyncPlaybackController(_AudioPlayerLipSyncSource(_player));
+  }
   final JarvisApiClient api;
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
+  late final LipSyncPlaybackController _lipSync;
+  final LipSyncAnalyzer _lipSyncAnalyzer = const LipSyncAnalyzer();
   AvatarState state = AvatarState.idle;
   String conversationId = 'avatar-${DateTime.now().millisecondsSinceEpoch}';
   String reply = '';
@@ -21,6 +27,7 @@ class AvatarController extends ChangeNotifier {
   int _presentationGeneration = 0;
   bool _recording = false;
   bool get isRecording => _recording;
+  ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
 
   Future<void> toggleRecording() async {
     if (_recording) {
@@ -47,6 +54,7 @@ class AvatarController extends ChangeNotifier {
 
   Future<void> _run(Uint8List bytes, {String? typed}) async {
     final generation = ++_presentationGeneration;
+    await _lipSync.stop();
     try {
       state = AvatarState.thinking;
       notifyListeners();
@@ -65,7 +73,7 @@ class AvatarController extends ChangeNotifier {
       if (generation != _presentationGeneration) return;
       state = AvatarState.speaking;
       notifyListeners();
-      await _player.play(BytesSource(audio));
+      await _playAudioWithLipSync(audio);
       if (generation != _presentationGeneration) return;
       if (plan.tailDuration > Duration.zero) await Future<void>.delayed(plan.tailDuration);
       if (generation != _presentationGeneration) return;
@@ -76,7 +84,19 @@ class AvatarController extends ChangeNotifier {
     }
   }
 
+  Future<void> _playAudioWithLipSync(Uint8List audio) async {
+    try {
+      final envelope = _lipSyncAnalyzer.analyzeWav(audio);
+      await _lipSync.play(envelope: envelope, audioBytes: audio);
+    } catch (error) {
+      debugPrint('JARVIS_LIPSYNC analyzer/playback bridge skipped: $error');
+      await _lipSync.stop();
+      await _player.play(BytesSource(audio));
+    }
+  }
+
   void _fail(String message) {
+    _lipSync.reset();
     state = AvatarState.error;
     errorMessage = message;
     _recording = false;
@@ -86,11 +106,30 @@ class AvatarController extends ChangeNotifier {
   @override
   void dispose() {
     _presentationGeneration++;
+    _lipSync.dispose();
     _recorder.dispose();
     _player.dispose();
     api.dispose();
     super.dispose();
   }
+}
+
+class _AudioPlayerLipSyncSource implements LipSyncPlaybackSource {
+  const _AudioPlayerLipSyncSource(this.player);
+
+  final AudioPlayer player;
+
+  @override
+  Stream<Duration> get positionStream => player.onPositionChanged;
+
+  @override
+  Stream<void> get completionStream => player.onPlayerComplete.map<void>((_) {});
+
+  @override
+  Future<void> play(Uint8List audioBytes) => player.play(BytesSource(audioBytes));
+
+  @override
+  Future<void> stop() => player.stop();
 }
 
 

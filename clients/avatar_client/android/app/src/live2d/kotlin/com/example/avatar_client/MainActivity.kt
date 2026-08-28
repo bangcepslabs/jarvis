@@ -10,6 +10,6 @@ class MainActivity : FlutterActivity() {
         flutterEngine
             .platformViewsController
             .registry
-            .registerViewFactory("jarvis/live2d", Live2DPlatformViewFactory(this, StandardMessageCodec.INSTANCE))
+            .registerViewFactory("jarvis/live2d", Live2DPlatformViewFactory(flutterEngine.dartExecutor.binaryMessenger, StandardMessageCodec.INSTANCE))
     }
 }

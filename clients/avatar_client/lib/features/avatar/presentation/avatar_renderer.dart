@@ -105,25 +105,78 @@ class Live2DAvatarRenderer implements AvatarRenderer {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return const _Live2DFallback(message: 'Live2D renderer is Android-only.');
     }
-    return AndroidView(
-      viewType: 'jarvis/live2d',
-      creationParams: {
-        'modelAsset': config.modelAsset,
-        'motion': config.profile.ambientMotions.isEmpty ? 'idle' : config.profile.ambientMotions.first,
-        'state': state.name,
-        'expression': config.expression.isNotEmpty ? config.expression : (config.profile.expressionFor(hint.emotion) ?? ''),
-        'mouthOpenParameter': config.profile.mouthOpenParameter,
-        'mouthFormParameter': config.profile.mouthFormParameter,
-        'mouthMin': config.profile.mouthMin,
-        'mouthMax': config.profile.mouthMax,
-        'mouthGain': config.profile.mouthGain,
-        'emotion': hint.emotion.name,
-        'intensity': hint.intensity,
-        'motionIntent': hint.motionIntent.name,
-      },
-      creationParamsCodec: const StandardMessageCodec(),
-    );
+    return _Live2DPlatformView(config: config, state: state, hint: hint, mouthOpen: 0);
   }
+}
+
+Map<String, Object> live2DUpdateParams(
+  AvatarRendererConfig config,
+  AvatarState state,
+  AvatarPresentationHint hint,
+  double mouthOpen,
+) {
+  final reactionMotion = state == AvatarState.speaking ? config.profile.reactionMotions[hint.motionIntent] : null;
+  return {
+    'modelAsset': config.modelAsset,
+    'motion': reactionMotion ?? (config.profile.ambientMotions.isEmpty ? 'idle' : config.profile.ambientMotions.first),
+    'state': state.name,
+    'expression': config.expression.isNotEmpty ? config.expression : (config.profile.expressionFor(hint.emotion) ?? ''),
+    'mouthOpenParameter': config.profile.mouthOpenParameter,
+    'mouthFormParameter': config.profile.mouthFormParameter,
+    'mouthMin': config.profile.mouthMin,
+    'mouthMax': config.profile.mouthMax,
+    'mouthGain': config.profile.mouthGain,
+    'emotion': hint.emotion.name,
+    'intensity': hint.intensity,
+    'motionIntent': hint.motionIntent.name,
+    'reaction': hint.reaction.name,
+    'mouthOpen': mouthOpen,
+  };
+}
+
+class _Live2DPlatformView extends StatefulWidget {
+  const _Live2DPlatformView({required this.config, required this.state, required this.hint, required this.mouthOpen});
+
+  final AvatarRendererConfig config;
+  final AvatarState state;
+  final AvatarPresentationHint hint;
+  final double mouthOpen;
+
+  @override
+  State<_Live2DPlatformView> createState() => _Live2DPlatformViewState();
+}
+
+class _Live2DPlatformViewState extends State<_Live2DPlatformView> {
+  MethodChannel? _channel;
+
+  Map<String, Object> get _params => live2DUpdateParams(widget.config, widget.state, widget.hint, widget.mouthOpen);
+
+  void _created(int viewId) {
+    _channel = MethodChannel('jarvis/live2d/$viewId');
+    _sendUpdate();
+  }
+
+  void _sendUpdate() {
+    final channel = _channel;
+    if (channel == null) return;
+    channel.invokeMethod<void>('update', _params).catchError((_) {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _Live2DPlatformView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state || oldWidget.hint != widget.hint || oldWidget.config != widget.config || oldWidget.mouthOpen != widget.mouthOpen) {
+      _sendUpdate();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AndroidView(
+    viewType: 'jarvis/live2d',
+    creationParams: _params,
+    creationParamsCodec: const StandardMessageCodec(),
+    onPlatformViewCreated: _created,
+  );
 }
 
 class AvatarRendererHost extends StatelessWidget {
@@ -133,12 +186,14 @@ class AvatarRendererHost extends StatelessWidget {
     required this.state,
     required this.size,
     required this.presentationHint,
+    this.mouthOpen = 0,
   });
 
   final AvatarRendererConfig config;
   final AvatarState state;
   final double size;
   final AvatarPresentationHint presentationHint;
+  final double mouthOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +202,7 @@ class AvatarRendererHost extends StatelessWidget {
       AvatarRendererKind.live2d => Live2DAvatarRenderer(config),
     };
     if (config.kind == AvatarRendererKind.live2d) {
-      return renderer.build(context, state, double.infinity, presentationHint);
+      return _Live2DPlatformView(config: config, state: state, hint: presentationHint, mouthOpen: mouthOpen);
     }
     return LayoutBuilder(
       builder: (context, constraints) => Center(

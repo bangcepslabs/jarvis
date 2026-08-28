@@ -6,8 +6,10 @@ LLM/STT/TTS models.
 
 ## Ubuntu host
 
-Required runtime files are `app/`, `pyproject.toml`, `.env`, and the persistent
-data/model directories. Keep secrets in `.env`, never in Git.
+Required runtime files are `app/`, `pyproject.toml`, and persistent data/model
+directories. Keep secrets in ignored environment files, never in Git. Local
+development continues to load `.env`; production systemd loads
+`.env.production` explicitly through `EnvironmentFile`.
 
 For a native install:
 
@@ -18,9 +20,59 @@ pip install -e .
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
+For a production server, create the secret file without committing it:
+
+```bash
+cp .env.example .env.production
+chmod 600 .env.production
+openssl rand -hex 32  # use the output for JARVIS_CLIENT_TOKEN
+```
+
+Set at least the production values below. `JARVIS_TTS_MODEL_DIR` is the
+recommended deployment name; `TTS_MODEL_DIR` remains compatible.
+
+```dotenv
+APP_ENV=production
+JARVIS_AUTH_ENABLED=true
+JARVIS_CLIENT_TOKEN=<generated-token>
+LLM_PROVIDER=openai
+LLM_API_KEY=<provider-key>
+LLM_BASE_URL=https://api.groq.com/openai/v1
+STT_ENABLED=true
+TTS_ENABLED=true
+JARVIS_TTS_MODEL_DIR=data/models/tts/supertonic-3
+STT_PRELOAD=true
+TTS_PRELOAD=true
+VOICE_LATENCY_METRICS=true
+```
+
 For automatic startup, copy `deploy/jarvis-core.service.example` to
-`/etc/systemd/system/jarvis-core.service`, adjust the user and paths, then run
-`systemctl enable --now jarvis-core`.
+`/etc/systemd/system/jarvis-core.service`, replace `<USER>`, `<GROUP>`, and
+`<PROJECT_DIR>`, then run:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now jarvis-core
+sudo systemctl status jarvis-core
+journalctl -u jarvis-core -f
+```
+
+`WorkingDirectory` must be the repository root so relative SQLite and model
+paths work. Run the service as the normal deployment user (and ensure it has
+any required Docker group access), not root.
+
+To update:
+
+```bash
+cd <PROJECT_DIR>
+git pull
+.venv/bin/pip install -e .
+sudo systemctl restart jarvis-core
+curl http://127.0.0.1:8000/health
+```
+
+Preload trades slower startup and higher resident RAM for a faster first voice
+turn. A preload failure is isolated and lazy loading remains available.
 
 ## Persistent paths
 

@@ -5,13 +5,14 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=jarvis
-Group=jarvis
-WorkingDirectory=/opt/jarvis
-EnvironmentFile=/opt/jarvis/.env
-ExecStart=/opt/jarvis/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+User=<USER>
+Group=<GROUP>
+WorkingDirectory=<PROJECT_DIR>
+EnvironmentFile=<PROJECT_DIR>/.env.production
+ExecStart=<PROJECT_DIR>/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=5
+TimeoutStopSec=30
 PrivateTmp=true
 
 [Install]

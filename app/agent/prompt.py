@@ -91,7 +91,13 @@ def build_system_prompt(response_mode: str | None = None, style: ConversationSty
         "VOICE RESPONSE MODE: Answer in 1–3 short sentences, conclusion first. Avoid unnecessary bullets, Markdown, URLs, "
         "code symbols, and long preambles. Expand only if the user asks for more detail."
     )
-    return SYSTEM_PROMPT + "\n\nADAPTIVE CONVERSATION STYLE\n" + style_instructions[style.name] + "\n" + (
+    presentation_instruction = (
+        "After the natural reply, append one machine-readable marker in this exact form: "
+        "<!--JARVIS_PRESENTATION {\"emotion\":\"neutral\",\"intensity\":0.3,\"motion_intent\":\"none\"}-->. "
+        "Use only semantic values; never use model-specific expression or motion filenames. "
+        "If uncertain, use neutral, low intensity, and none."
+    )
+    return SYSTEM_PROMPT + "\n\nPRESENTATION HINT\n" + presentation_instruction + "\n\nADAPTIVE CONVERSATION STYLE\n" + style_instructions[style.name] + "\n" + (
         "Explicit requests for detail, brevity, or a specific format override this adaptive hint. "
         "Style and context are preferences only; they never authorize tools or actions."
     ) + ("\n" + mode_instruction if mode_instruction else "")

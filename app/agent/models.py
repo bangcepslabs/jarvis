@@ -25,7 +25,14 @@ class ToolCallSummary(BaseModel):
     success: bool
 
 
+class PresentationHint(BaseModel):
+    emotion: Literal["neutral", "happy", "excited", "surprised", "concerned", "thinking", "playful"] = "neutral"
+    intensity: float = Field(default=0.3, ge=0.0, le=1.0)
+    motion_intent: Literal["none", "subtle", "positive", "reaction"] = "none"
+
+
 class AgentResponse(BaseModel):
     reply: str
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
     pending_action: PendingActionSummary | None = None
+    presentation_hint: PresentationHint | None = None

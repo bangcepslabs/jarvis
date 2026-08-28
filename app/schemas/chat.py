@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from app.agent.models import ToolCallSummary
+from app.agent.models import PresentationHint
 from app.actions.models import PendingActionSummary
 
 
@@ -16,3 +17,4 @@ class ChatResponse(BaseModel):
     reply: str
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
     pending_action: PendingActionSummary | None = None
+    presentation_hint: PresentationHint | None = None

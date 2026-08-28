@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
+import '../domain/avatar_presentation_hint.dart';
 
 class AvatarController extends ChangeNotifier {
   AvatarController(this.api);
@@ -14,6 +15,7 @@ class AvatarController extends ChangeNotifier {
   String conversationId = 'avatar-${DateTime.now().millisecondsSinceEpoch}';
   String reply = '';
   String? errorMessage;
+  AvatarPresentationHint presentationHint = const AvatarPresentationHint();
   bool _recording = false;
   bool get isRecording => _recording;
 
@@ -46,7 +48,9 @@ class AvatarController extends ChangeNotifier {
       notifyListeners();
       final text = typed ?? await api.transcribe(bytes);
       if (text.isEmpty) return _fail('No speech detected');
-      reply = await api.chat(text, conversationId, responseMode: 'voice');
+      final chat = await api.chat(text, conversationId, responseMode: typed == null ? 'voice' : 'text');
+      reply = chat.reply;
+      presentationHint = chat.presentationHint;
       final audio = await api.synthesize(reply);
       state = AvatarState.speaking;
       notifyListeners();

@@ -7,6 +7,7 @@ from app.actions.service import ActionConfirmationService
 from app.actions.store import ActiveActionExistsError
 from app.agent.models import AgentResponse, ChatMessage, ToolCallSummary
 from app.agent.prompt import build_system_prompt, infer_conversation_style
+from app.agent.presentation import parse_presentation_response
 from app.agent.tool_router import ToolRouter
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
@@ -178,7 +179,8 @@ class JarvisAgent:
             return await self._finish(conversation_id, message, AgentResponse(reply="The AI service is currently unavailable."))
 
         if not llm_response.tool_calls:
-            response = AgentResponse(reply=llm_response.content or "I could not generate a response.")
+            reply, hint = parse_presentation_response(llm_response.content)
+            response = AgentResponse(reply=reply or "I could not generate a response.", presentation_hint=hint)
             if self._memory_curator and self._memory and memory_command is None:
                 try:
                     decision = await self._memory_curator.curate(message, response.reply, history, memories)
@@ -230,14 +232,15 @@ class JarvisAgent:
         messages.append(ChatMessage(role="tool", name=name, tool_call_id=llm_response.tool_calls[0].id, content=json.dumps(result.model_dump(), ensure_ascii=False)))
         try:
             final = await self._provider_chat(messages, [], "none")
-            reply = final.content or ("The requested information could not be retrieved." if not result.success else "Tool result received.")
+            reply, hint = parse_presentation_response(final.content)
+            reply = reply or ("The requested information could not be retrieved." if not result.success else "Tool result received.")
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response_after_tool name=%s retry_after=%s", name, getattr(exc.rate_limit, "retry_after", None))
-            reply = self._rate_limit_reply(exc.rate_limit)
+            reply, hint = self._rate_limit_reply(exc.rate_limit), None
         except LLMProviderError:
             logger.exception("provider_error_after_tool name=%s", name)
-            reply = "The requested information could not be retrieved." if not result.success else "Tool result received."
-        return await self._finish(conversation_id, user_message, AgentResponse(reply=reply, tool_calls=[ToolCallSummary(name=name, success=result.success)]))
+            reply, hint = ("The requested information could not be retrieved." if not result.success else "Tool result received."), None
+        return await self._finish(conversation_id, user_message, AgentResponse(reply=reply, tool_calls=[ToolCallSummary(name=name, success=result.success)], presentation_hint=hint))
 
     @staticmethod
     def _rate_limit_reply(info) -> str:

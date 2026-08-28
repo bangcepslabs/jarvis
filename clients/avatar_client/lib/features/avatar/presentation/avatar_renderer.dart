@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../domain/avatar_state.dart';
+import '../domain/avatar_presentation_hint.dart';
 
 enum AvatarRendererKind { placeholder, live2d }
 
@@ -42,12 +43,12 @@ class AvatarRendererConfig {
 }
 
 abstract interface class AvatarRenderer {
-  Widget build(BuildContext context, AvatarState state, double size);
+  Widget build(BuildContext context, AvatarState state, double size, AvatarPresentationHint hint);
 }
 
 class PlaceholderAvatarRenderer implements AvatarRenderer {
   @override
-  Widget build(BuildContext context, AvatarState state, double size) =>
+  Widget build(BuildContext context, AvatarState state, double size, AvatarPresentationHint hint) =>
       AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         width: size,
@@ -90,7 +91,7 @@ class Live2DAvatarRenderer implements AvatarRenderer {
   final AvatarRendererConfig config;
 
   @override
-  Widget build(BuildContext context, AvatarState state, double size) {
+  Widget build(BuildContext context, AvatarState state, double size, AvatarPresentationHint hint) {
     if (defaultTargetPlatform != TargetPlatform.android) {
       return const _Live2DFallback(message: 'Live2D renderer is Android-only.');
     }
@@ -101,6 +102,9 @@ class Live2DAvatarRenderer implements AvatarRenderer {
         'motion': 'idle',
         'state': state.name,
         'expression': config.expression,
+        'emotion': hint.emotion.name,
+        'intensity': hint.intensity,
+        'motionIntent': hint.motionIntent.name,
       },
       creationParamsCodec: const StandardMessageCodec(),
     );
@@ -113,11 +117,13 @@ class AvatarRendererHost extends StatelessWidget {
     required this.config,
     required this.state,
     required this.size,
+    required this.presentationHint,
   });
 
   final AvatarRendererConfig config;
   final AvatarState state;
   final double size;
+  final AvatarPresentationHint presentationHint;
 
   @override
   Widget build(BuildContext context) {
@@ -126,7 +132,7 @@ class AvatarRendererHost extends StatelessWidget {
       AvatarRendererKind.live2d => Live2DAvatarRenderer(config),
     };
     if (config.kind == AvatarRendererKind.live2d) {
-      return renderer.build(context, state, double.infinity);
+      return renderer.build(context, state, double.infinity, presentationHint);
     }
     return LayoutBuilder(
       builder: (context, constraints) => Center(
@@ -136,6 +142,7 @@ class AvatarRendererHost extends StatelessWidget {
           constraints.maxWidth < constraints.maxHeight
               ? constraints.maxWidth * .72
               : constraints.maxHeight * .58,
+          presentationHint,
         ),
       ),
     );

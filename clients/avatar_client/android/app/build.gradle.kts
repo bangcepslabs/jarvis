@@ -40,6 +40,11 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // CubismCoreJNI resolves framework classes from JNI_OnLoad. Keep
+            // release builds unshrunk until the SDK's complete R8 rules are
+            // available; otherwise startup aborts with ClassNotFoundException.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }

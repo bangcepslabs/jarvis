@@ -57,7 +57,10 @@ class ToolRouter:
         recent = context[-4:] if context else []
         context_text = "\n".join(f"{item.role}: {item.content}" for item in recent) or "(none)"
         classification = f"{prompt}\nRecent context:\n{context_text}\nCurrent request:\n{message}\nReturn only the structured routing decision."
-        messages = [ChatMessage(role="system", content=classification)]
+        # Groq's GPT-OSS chat template requires a user message. Keeping the
+        # complete classification prompt in that message also avoids sending
+        # a router request containing only a system message.
+        messages = [ChatMessage(role="user", content=classification)]
         self.last_prompt_chars = len(classification)
         self.last_context_message_count = len(recent)
         self.last_context_chars = sum(len(item.content) for item in recent)

@@ -1,6 +1,7 @@
 import json
 import logging
 import inspect
+import re
 
 from app.actions.models import ActionStatus, PendingAction, PendingActionSummary
 from app.actions.service import ActionConfirmationService
@@ -33,6 +34,18 @@ def _text(*code_points: int) -> str:
 
 APPROVAL_WORDS = ("yes", "y", "confirm", "approve", _text(0xC751), _text(0xADF8), _text(0xC9C4, 0xD589), _text(0xC2E4, 0xD589, 0xD574))
 REJECTION_WORDS = ("no", "n", "cancel", _text(0xC544, 0xB2C8), _text(0xCDE8, 0xC18C), _text(0xD558, 0xC9C0, 0xB9C8), _text(0xC548, 0xB3FC))
+
+
+def _language_safe_reply(user_message: str, reply: str) -> str:
+    """Keep fixed fallback replies in the language used by a Korean user."""
+    if not re.search(r"[\uac00-\ud7a3]", user_message):
+        return reply
+    return {
+        "The AI service is currently unavailable.": "현재 AI 서비스를 사용할 수 없어요.",
+        "I could not generate a response.": "응답을 만들지 못했어요. 다시 말씀해 주세요.",
+        "The requested information could not be retrieved.": "요청한 정보를 가져오지 못했어요.",
+        "Tool result received.": "도구 결과를 확인했어요.",
+    }.get(reply, reply)
 
 
 class JarvisAgent:
@@ -173,14 +186,14 @@ class JarvisAgent:
             )
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response retry_after=%s remaining_requests=%s remaining_tokens=%s", getattr(exc.rate_limit, "retry_after", None), getattr(exc.rate_limit, "remaining_requests", None), getattr(exc.rate_limit, "remaining_tokens", None))
-            return await self._finish(conversation_id, message, AgentResponse(reply=self._rate_limit_reply(exc.rate_limit)))
+            return await self._finish(conversation_id, message, AgentResponse(reply=_language_safe_reply(message, self._rate_limit_reply(exc.rate_limit))))
         except LLMProviderError:
             logger.exception("provider_error")
-            return await self._finish(conversation_id, message, AgentResponse(reply="The AI service is currently unavailable."))
+            return await self._finish(conversation_id, message, AgentResponse(reply=_language_safe_reply(message, "The AI service is currently unavailable.")))
 
         if not llm_response.tool_calls:
             reply, hint = parse_presentation_response(llm_response.content)
-            response = AgentResponse(reply=reply or "I could not generate a response.", presentation_hint=hint)
+            response = AgentResponse(reply=_language_safe_reply(message, reply or "I could not generate a response."), presentation_hint=hint)
             if self._memory_curator and self._memory and memory_command is None:
                 try:
                     decision = await self._memory_curator.curate(message, response.reply, history, memories)
@@ -236,10 +249,12 @@ class JarvisAgent:
             reply = reply or ("The requested information could not be retrieved." if not result.success else "Tool result received.")
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response_after_tool name=%s retry_after=%s", name, getattr(exc.rate_limit, "retry_after", None))
-            reply, hint = self._rate_limit_reply(exc.rate_limit), None
+            reply, hint = _language_safe_reply(user_message, self._rate_limit_reply(exc.rate_limit)), None
         except LLMProviderError:
             logger.exception("provider_error_after_tool name=%s", name)
-            reply, hint = ("The requested information could not be retrieved." if not result.success else "Tool result received."), None
+            fallback = "The requested information could not be retrieved." if not result.success else "Tool result received."
+            reply, hint = _language_safe_reply(user_message, fallback), None
+        reply = _language_safe_reply(user_message, reply)
         return await self._finish(conversation_id, user_message, AgentResponse(reply=reply, tool_calls=[ToolCallSummary(name=name, success=result.success)], presentation_hint=hint))
 
     @staticmethod

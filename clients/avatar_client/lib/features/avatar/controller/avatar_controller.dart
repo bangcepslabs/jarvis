@@ -28,6 +28,7 @@ class AvatarController extends ChangeNotifier {
   final CharacterReactionPolicy reactionPolicy = const CharacterReactionPolicy();
   int _presentationGeneration = 0;
   bool _recording = false;
+  DateTime? _recordingStartedAt;
   bool get isRecording => _recording;
   ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
 
@@ -37,11 +38,18 @@ class AvatarController extends ChangeNotifier {
         final path = await _recorder.stop();
         _recording = false;
         notifyListeners();
-        if (path == null) return _fail('Recording did not produce audio');
+        final recordingElapsed = _recordingStartedAt == null
+            ? null
+            : DateTime.now().difference(_recordingStartedAt!);
+        _recordingStartedAt = null;
+        if (path == null) return _fail('음성 녹음 파일이 생성되지 않았어요.');
         final file = File(path);
-        if (!await file.exists()) return _fail('Recording file was not created');
+        if (!await file.exists()) return _fail('음성 녹음 파일을 찾을 수 없어요.');
         try {
-          await _run(await XFile(path).readAsBytes());
+          await _run(
+            await XFile(path).readAsBytes(),
+            recordingElapsed: recordingElapsed,
+          );
         } finally {
           try {
             await file.delete();
@@ -66,9 +74,10 @@ class AvatarController extends ChangeNotifier {
         const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
         path: path,
       );
+      _recordingStartedAt = DateTime.now();
     } catch (error) {
       _recording = false;
-      _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
+      _fail('녹음에 실패했어요: ${error.toString().replaceFirst('Exception: ', '')}');
     }
   }
 
@@ -76,16 +85,32 @@ class AvatarController extends ChangeNotifier {
     if (text.trim().isNotEmpty) await _run(Uint8List(0), typed: text.trim());
   }
 
-  Future<void> _run(Uint8List bytes, {String? typed}) async {
+  Future<void> _run(Uint8List bytes, {String? typed, Duration? recordingElapsed}) async {
     final generation = ++_presentationGeneration;
+    final totalTimer = Stopwatch()..start();
+    Duration? sttElapsed;
+    Duration? chatElapsed;
+    Duration? ttsElapsed;
+    Duration? lipSyncElapsed;
     await _lipSync.stop();
     try {
       state = AvatarState.thinking;
       notifyListeners();
-      final text = typed ?? await api.transcribe(bytes);
+      String text;
+      if (typed != null) {
+        text = typed;
+      } else {
+        final timer = Stopwatch()..start();
+        text = await api.transcribe(bytes);
+        timer.stop();
+        sttElapsed = timer.elapsed;
+      }
       if (generation != _presentationGeneration) return;
-      if (text.isEmpty) return _fail('No speech detected');
+      if (text.isEmpty) return _fail('음성을 인식하지 못했어요. 다시 말씀해 주세요.');
+      final chatTimer = Stopwatch()..start();
       final chat = await api.chat(text, conversationId, responseMode: typed == null ? 'voice' : 'text');
+      chatTimer.stop();
+      chatElapsed = chatTimer.elapsed;
       if (generation != _presentationGeneration) return;
       reply = chat.reply;
       presentationHint = chat.presentationHint;
@@ -93,11 +118,17 @@ class AvatarController extends ChangeNotifier {
       final audioFuture = api.synthesize(reply, presentationHint: presentationHint);
       if (plan.preSpeechDelay > Duration.zero) await Future<void>.delayed(plan.preSpeechDelay);
       if (generation != _presentationGeneration) return;
+      final ttsTimer = Stopwatch()..start();
       final audio = await audioFuture;
+      ttsTimer.stop();
+      ttsElapsed = ttsTimer.elapsed;
       if (generation != _presentationGeneration) return;
       state = AvatarState.speaking;
       notifyListeners();
+      final lipSyncTimer = Stopwatch()..start();
       await _playAudioWithLipSync(audio);
+      lipSyncTimer.stop();
+      lipSyncElapsed = lipSyncTimer.elapsed;
       if (generation != _presentationGeneration) return;
       if (plan.tailDuration > Duration.zero) await Future<void>.delayed(plan.tailDuration);
       if (generation != _presentationGeneration) return;
@@ -105,8 +136,23 @@ class AvatarController extends ChangeNotifier {
       notifyListeners();
     } catch (error) {
       if (generation == _presentationGeneration) _fail(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      totalTimer.stop();
+      if (kDebugMode) {
+        debugPrint(
+          '[voice_latency] recording_finalize=${_formatDuration(recordingElapsed)} '
+          'stt=${_formatDuration(sttElapsed)} '
+          'chat=${_formatDuration(chatElapsed)} '
+          'tts=${_formatDuration(ttsElapsed)} '
+          'time_to_first_audio=${_formatDuration(lipSyncElapsed)} '
+          'processing=${_formatDuration(totalTimer.elapsed)}',
+        );
+      }
     }
   }
+
+  String _formatDuration(Duration? duration) =>
+      duration == null ? 'skipped' : '${duration.inMilliseconds}ms';
 
   Future<void> _playAudioWithLipSync(Uint8List audio) async {
     try {

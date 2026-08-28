@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     stt_model: str = "small"
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
-    stt_language: str | None = None
+    stt_language: str | None = "ko"
     stt_beam_size: int = 1
     stt_vad_filter: bool = True
     stt_preload: bool = Field(False, validation_alias=AliasChoices("STT_PRELOAD", "JARVIS_STT_PRELOAD"))

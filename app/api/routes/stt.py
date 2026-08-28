@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+import logging
 import time
 from app.core.config import get_settings
 
@@ -8,6 +9,7 @@ from app.stt.exceptions import AudioTooLargeError, STTDisabledError, STTProvider
 from app.stt.service import STTService
 
 router = APIRouter(prefix="/api", tags=["stt"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/stt/transcribe", dependencies=[Depends(require_client_auth)])
@@ -17,9 +19,17 @@ async def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
         audio = await file.read()
         started = time.perf_counter()
         result = await service.transcribe(audio, file.filename)
+        elapsed_ms = round((time.perf_counter() - started) * 1000)
+        logger.info(
+            "stt_result language=%s chars=%s empty=%s elapsed_ms=%s",
+            result.language or "unknown",
+            len(result.text.strip()),
+            not bool(result.text.strip()),
+            elapsed_ms,
+        )
         payload = result.model_dump(exclude={"segments"})
         if get_settings().voice_latency_metrics:
-            payload["_timing"] = {"stt_total_ms": round((time.perf_counter() - started) * 1000)}
+            payload["_timing"] = {"stt_total_ms": elapsed_ms}
         return payload
     except AudioTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc

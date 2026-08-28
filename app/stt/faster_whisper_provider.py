@@ -12,13 +12,14 @@ logger = logging.getLogger(__name__)
 
 
 class FasterWhisperProvider(STTProvider):
-    def __init__(self, model: str = "small", device: str = "cpu", compute_type: str = "int8", language: str | None = None, beam_size: int = 1, vad_filter: bool = True, cache_dir: str | None = None, temp_dir: str | None = None) -> None:
+    def __init__(self, model: str = "small", device: str = "cpu", compute_type: str = "int8", language: str | None = None, beam_size: int = 1, vad_filter: bool = True, cpu_threads: int = 0, cache_dir: str | None = None, temp_dir: str | None = None) -> None:
         self._model_name = model
         self._device = device
         self._compute_type = compute_type
         self._language = language or None
         self._beam_size = beam_size
         self._vad_filter = vad_filter
+        self._cpu_threads = cpu_threads
         self._cache_dir = cache_dir
         self._temp_dir = temp_dir
         self._model = None
@@ -38,9 +39,19 @@ class FasterWhisperProvider(STTProvider):
         try:
             from faster_whisper import WhisperModel
             kwargs = {"device": self._device, "compute_type": self._compute_type}
+            if self._device.lower() == "cpu" and self._cpu_threads > 0:
+                kwargs["cpu_threads"] = self._cpu_threads
             if self._cache_dir:
                 kwargs["download_root"] = self._cache_dir
-            return WhisperModel(self._model_name, **kwargs)
+            model = WhisperModel(self._model_name, **kwargs)
+            logger.info(
+                "stt_model_loaded device=%s compute_type=%s cpu_threads=%s model=%s",
+                self._device,
+                self._compute_type,
+                self._cpu_threads if self._device.lower() == "cpu" else None,
+                self._model_name,
+            )
+            return model
         except Exception as exc:
             raise STTProviderError("The speech model could not be loaded.") from exc
 

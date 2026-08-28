@@ -69,6 +69,7 @@ class Settings(BaseSettings):
     stt_language: str | None = "ko"
     stt_beam_size: int = 1
     stt_vad_filter: bool = True
+    stt_cpu_threads: int = Field(0, ge=0, validation_alias=AliasChoices("STT_CPU_THREADS", "JARVIS_STT_CPU_THREADS"))
     stt_preload: bool = Field(False, validation_alias=AliasChoices("STT_PRELOAD", "JARVIS_STT_PRELOAD"))
     stt_timeout_seconds: float = 60.0
     stt_max_file_mb: int = 20

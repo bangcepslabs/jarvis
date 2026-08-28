@@ -45,6 +45,7 @@ LLM_PROVIDER=openai
 LLM_API_KEY=<provider-key>
 LLM_BASE_URL=https://api.groq.com/openai/v1
 STT_ENABLED=true
+STT_CPU_THREADS=6
 TTS_ENABLED=true
 JARVIS_TTS_MODEL_DIR=data/models/tts/supertonic-3
 STT_PRELOAD=true

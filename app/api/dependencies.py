@@ -105,6 +105,7 @@ def get_stt_service() -> STTService:
             language=settings.stt_language,
             beam_size=settings.stt_beam_size,
             vad_filter=settings.stt_vad_filter,
+            cpu_threads=settings.stt_cpu_threads,
             cache_dir=settings.stt_model_cache_dir,
             temp_dir=settings.temp_dir,
         ),

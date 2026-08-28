@@ -29,6 +29,9 @@ class PresentationHint(BaseModel):
     emotion: Literal["neutral", "happy", "excited", "surprised", "concerned", "thinking", "playful"] = "neutral"
     intensity: float = Field(default=0.3, ge=0.0, le=1.0)
     motion_intent: Literal["none", "subtle", "positive", "reaction"] = "none"
+    attitude: Literal["neutral", "friendly", "playful", "supportive", "curious", "serious", "confident"] = "neutral"
+    reaction: Literal["none", "acknowledge", "agree", "disagree", "celebrate", "surprise", "worry", "think", "tease", "encourage"] = "none"
+    duration: Literal["short", "normal", "hold"] = "normal"
 
 
 class AgentResponse(BaseModel):

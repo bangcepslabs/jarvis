@@ -93,7 +93,7 @@ def build_system_prompt(response_mode: str | None = None, style: ConversationSty
     )
     presentation_instruction = (
         "After the natural reply, append one machine-readable marker in this exact form: "
-        "<!--JARVIS_PRESENTATION {\"emotion\":\"neutral\",\"intensity\":0.3,\"motion_intent\":\"none\"}-->. "
+        "<!--JARVIS_PRESENTATION {\"emotion\":\"neutral\",\"intensity\":0.3,\"motion_intent\":\"none\",\"attitude\":\"neutral\",\"reaction\":\"none\",\"duration\":\"normal\"}-->. "
         "Use only semantic values; never use model-specific expression or motion filenames. "
         "If uncertain, use neutral, low intensity, and none."
     )

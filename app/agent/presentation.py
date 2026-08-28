@@ -12,7 +12,7 @@ def parse_presentation_response(content: str | None) -> tuple[str, PresentationH
     marker = _MARKER.search(text)
     if marker:
         try:
-            return _clean(text[:marker.start()] + text[marker.end():]), PresentationHint.model_validate(json.loads(marker.group(1)))
+            return _clean(text[:marker.start()] + text[marker.end():]), _safe_hint(json.loads(marker.group(1)))
         except (json.JSONDecodeError, TypeError, ValueError):
             return _clean(_MARKER.sub("", text)), PresentationHint()
     try:
@@ -21,7 +21,7 @@ def parse_presentation_response(content: str | None) -> tuple[str, PresentationH
         return text, PresentationHint()
     if isinstance(decoded, dict) and "reply" in decoded:
         try:
-            return str(decoded["reply"]), PresentationHint.model_validate(decoded.get("presentation_hint") or {})
+            return str(decoded["reply"]), _safe_hint(decoded.get("presentation_hint") or {})
         except (TypeError, ValueError):
             return str(decoded.get("reply", text)), PresentationHint()
     return text, PresentationHint()
@@ -29,3 +29,16 @@ def parse_presentation_response(content: str | None) -> tuple[str, PresentationH
 
 def _clean(value: str) -> str:
     return value.strip()
+
+
+def _safe_hint(value: object) -> PresentationHint:
+    if not isinstance(value, dict):
+        return PresentationHint()
+    defaults = PresentationHint()
+    fields = {}
+    for name in ("emotion", "intensity", "motion_intent", "attitude", "reaction", "duration"):
+        try:
+            fields[name] = PresentationHint.model_validate({name: value.get(name, getattr(defaults, name))}).__getattribute__(name)
+        except (TypeError, ValueError):
+            fields[name] = getattr(defaults, name)
+    return PresentationHint(**fields)

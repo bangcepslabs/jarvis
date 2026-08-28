@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
 import '../domain/avatar_presentation_hint.dart';
+import '../domain/character_reaction_policy.dart';
 
 class AvatarController extends ChangeNotifier {
   AvatarController(this.api);
@@ -16,6 +17,8 @@ class AvatarController extends ChangeNotifier {
   String reply = '';
   String? errorMessage;
   AvatarPresentationHint presentationHint = const AvatarPresentationHint();
+  final CharacterReactionPolicy reactionPolicy = const CharacterReactionPolicy();
+  int _presentationGeneration = 0;
   bool _recording = false;
   bool get isRecording => _recording;
 
@@ -43,22 +46,32 @@ class AvatarController extends ChangeNotifier {
   }
 
   Future<void> _run(Uint8List bytes, {String? typed}) async {
+    final generation = ++_presentationGeneration;
     try {
       state = AvatarState.thinking;
       notifyListeners();
       final text = typed ?? await api.transcribe(bytes);
+      if (generation != _presentationGeneration) return;
       if (text.isEmpty) return _fail('No speech detected');
       final chat = await api.chat(text, conversationId, responseMode: typed == null ? 'voice' : 'text');
+      if (generation != _presentationGeneration) return;
       reply = chat.reply;
       presentationHint = chat.presentationHint;
       final audio = await api.synthesize(reply, presentationHint: presentationHint);
+      if (generation != _presentationGeneration) return;
+      final plan = reactionPolicy.plan(presentationHint, AvatarState.speaking);
+      if (plan.preSpeechDelay > Duration.zero) await Future<void>.delayed(plan.preSpeechDelay);
+      if (generation != _presentationGeneration) return;
       state = AvatarState.speaking;
       notifyListeners();
       await _player.play(BytesSource(audio));
+      if (generation != _presentationGeneration) return;
+      if (plan.tailDuration > Duration.zero) await Future<void>.delayed(plan.tailDuration);
+      if (generation != _presentationGeneration) return;
       state = AvatarState.idle;
       notifyListeners();
     } catch (error) {
-      _fail(error.toString().replaceFirst('Exception: ', ''));
+      if (generation == _presentationGeneration) _fail(error.toString().replaceFirst('Exception: ', ''));
     }
   }
 
@@ -71,6 +84,7 @@ class AvatarController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _presentationGeneration++;
     _recorder.dispose();
     _player.dispose();
     api.dispose();

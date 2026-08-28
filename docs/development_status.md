@@ -263,3 +263,20 @@ context selection, budgets, routing, authorization, or safety behavior.
 LLM Prompt Calibration: IMPLEMENTED / UNIT TESTED
 Adaptive budget changes: NOT IMPLEMENTED (measure only)
 Raw prompt/memory/tool result logging: NOT ALLOWED
+
+### Conversation Persistence
+
+Conversation history is persisted through `SQLiteConversationStore` and
+conversation summaries through `SQLiteConversationSummaryStore`, using the
+same `JARVIS_DB_PATH`/`MEMORY_DATABASE_PATH` SQLite file as long-term Memory.
+Messages use deterministic per-conversation sequence ordering. Summary text,
+summarized turn keys, and `summarized_through_sequence` are persisted so a Core
+restart with the same `conversation_id` can recover context and avoid duplicate
+summarization.
+
+Conversation History: PERSISTENT / UNIT TESTED
+Conversation Summary: PERSISTENT / UNIT TESTED
+Core Restart Context Recovery: IMPLEMENTED / UNIT TESTED
+PendingAction Persistence: NOT IMPLEMENTED (runtime-only by policy)
+Summary -> Authorization: NOT ALLOWED
+Summary -> Persistent Memory automatic promotion: NOT IMPLEMENTED

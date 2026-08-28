@@ -175,9 +175,11 @@ Persistent Memory is separate from conversation context and transient
 
 ## Conversation Context
 
-v0.4.5 keeps recent user and assistant messages in a lock-protected in-memory
-`ConversationStore` for contextual follow-up requests. It is short-term runtime
-state, separate from SQLite Persistent Memory and `PendingAction` authorization.
+v0.5.3 stores conversation messages and summaries in SQLite through the same
+`MEMORY_DATABASE_PATH` (or `JARVIS_DB_PATH`) used by Persistent Memory. The
+SQLite source of truth is isolated by `conversation_id` and survives Core
+restart; `ConversationContextManager` still bounds the messages sent to the
+provider. `PendingAction` authorization remains runtime-only and separate.
 Clients may provide an optional `conversation_id` (default: `default`).
 Context is bounded by `CONVERSATION_MAX_MESSAGES` and
 `CONVERSATION_MAX_CONTEXT_CHARS`; set `CONVERSATION_ENABLED=false` to return to

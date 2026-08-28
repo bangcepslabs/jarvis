@@ -10,9 +10,9 @@ from app.services.docker_service import DockerService
 from app.memory.service import MemoryService
 from app.memory.sqlite_store import SQLiteMemoryStore
 from app.memory.curator import MemoryCurator
-from app.conversation.store import InMemoryConversationStore
+from app.conversation.store import SQLiteConversationStore
 from app.conversation.context import ConversationContextManager
-from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore
+from app.conversation.summary import ConversationSummarizer, SQLiteConversationSummaryStore
 from app.llm.calibration import LLMCalibrationCollector
 from app.tools.docker.tools import GetContainerLogsTool, GetContainerStatusTool, ListContainersTool
 from app.tools.docker.restart import RestartContainerTool
@@ -63,7 +63,7 @@ def get_chat_service() -> ChatService:
             max_item_chars=settings.memory_max_item_chars,
             max_context_chars=settings.memory_max_context_chars,
         )
-    conversations = InMemoryConversationStore(settings.conversation_store_max_messages) if settings.conversation_enabled else None
+    conversations = SQLiteConversationStore(settings.memory_database_path, settings.conversation_store_max_messages) if settings.conversation_enabled else None
     provider = create_llm_provider(settings)
     calibration = LLMCalibrationCollector()
     curator = MemoryCurator(provider, memory, settings) if memory and settings.memory_curator_enabled else None
@@ -80,7 +80,7 @@ def get_chat_service() -> ChatService:
                 tool_reserve=settings.conversation_context_tool_reserve,
                 output_reserve=settings.conversation_context_output_reserve,
             ),
-            ConversationSummaryStore(),
+            SQLiteConversationSummaryStore(settings.memory_database_path),
             ConversationSummarizer(provider, settings.conversation_summary_max_tokens, settings.llm_summary_model),
             settings.conversation_summary_enabled,
             settings.conversation_summary_min_new_turns,

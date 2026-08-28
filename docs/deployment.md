@@ -82,5 +82,5 @@ The image does not contain model binaries. Mount them before enabling STT/TTS.
 The Docker socket is intentionally not mounted by default; enabling it grants
 the container powerful host control and should be limited to installations
 that explicitly need Docker tools. Conversation context and summaries remain
-in memory across requests but are lost on Core restart; long-term Memory is
-SQLite-backed.
+persistently in SQLite across Core restarts. PendingAction state remains
+runtime-only and is intentionally not restored from conversation records.

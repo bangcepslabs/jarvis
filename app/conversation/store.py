@@ -3,6 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 
 from app.conversation.models import ConversationMessage
+from app.conversation.sqlite_store import SQLiteConversationRepository
 
 logger = logging.getLogger(__name__)
 
@@ -48,3 +49,20 @@ class InMemoryConversationStore(ConversationStore):
     async def count(self, conversation_id: str) -> int:
         async with self._lock:
             return len(self._messages.get(conversation_id, []))
+
+
+class SQLiteConversationStore(ConversationStore):
+    def __init__(self, database_path: str, max_messages: int = 50) -> None:
+        self._repository = SQLiteConversationRepository(database_path)
+
+    async def append(self, conversation_id: str, message: ConversationMessage) -> None:
+        await asyncio.to_thread(self._repository.append, conversation_id, message)
+
+    async def list_recent(self, conversation_id: str, limit: int | None = None) -> list[ConversationMessage]:
+        return await asyncio.to_thread(self._repository.list_recent, conversation_id, limit)
+
+    async def clear(self, conversation_id: str) -> None:
+        await asyncio.to_thread(self._repository.clear, conversation_id)
+
+    async def count(self, conversation_id: str) -> int:
+        return await asyncio.to_thread(self._repository.count, conversation_id)

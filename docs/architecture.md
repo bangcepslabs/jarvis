@@ -47,12 +47,15 @@ flowchart TD
 
 The LLM never executes tools directly. Every call passes through Registry lookup, argument validation, and safety enforcement. v0.3 Docker tools are READ_ONLY only: list containers, inspect one container, and retrieve bounded logs. v0.3.5 adds a generic in-memory `PendingAction` lifecycle: WRITE calls become pending, require explicit user approval, receive a runtime-only one-shot authorization, and return to the same ToolExecutor. DANGEROUS tools are always rejected. v0.4 adds `MemoryService -> SQLiteMemoryStore -> SQLite` for explicit long-term user context. Memory is not conversation history, PendingAction state, or system instruction; it cannot alter safety policy. Docker SDK failures become safe ToolResults; raw logs are not written to application logs. No Docker CLI, subprocess, shell, stop, remove, or exec operation exists. Secrets belong in environment settings and must never be logged.
 
-v0.4.5 adds a lock-protected in-memory `ConversationStore` isolated by
-`conversation_id`. Recent context is bounded by message count and character
-count and is not persisted to SQLite. System instructions, long-term memory,
-recent conversation, and the current user message are kept distinct. Tool
-protocol messages remain request-local, and conversation content cannot override
-runtime safety enforcement.
+v0.4.5 introduced a lock-protected `ConversationStore` isolated by
+`conversation_id`. The deployment persistence milestone now provides a
+`SQLiteConversationStore` and `SQLiteConversationSummaryStore` backed by the
+same database as long-term Memory. Message ordering uses a per-conversation
+sequence and the summary stores both its text and summarized-turn cursor.
+Context remains bounded by message count, character count, and token budget;
+system instructions, long-term memory, recent conversation, and the current
+user message remain distinct. Tool protocol messages remain request-local and
+PendingAction authorization is never reconstructed from conversation data.
 
 v0.4.7 adds a Daily Tools branch: `WeatherService` resolves locations through
 `OpenMeteoProvider`, then exposes bounded READ_ONLY current and forecast tools.

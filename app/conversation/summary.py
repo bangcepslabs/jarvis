@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.conversation.models import ConversationMessage
+from app.conversation.sqlite_store import SQLiteConversationRepository
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
 from app.llm.models import LLMResponse
@@ -56,6 +57,24 @@ class ConversationSummaryStore:
 
     def clear(self, conversation_id: str) -> None:
         self._states.pop(conversation_id, None)
+
+
+class SQLiteConversationSummaryStore(ConversationSummaryStore):
+    def __init__(self, database_path: str) -> None:
+        self._repository = SQLiteConversationRepository(database_path)
+
+    def get(self, conversation_id: str) -> ConversationSummaryState | None:
+        row = self._repository.get_summary(conversation_id)
+        return self._repository.summary_state(row) if row else None
+
+    def save(self, conversation_id: str, text: str, summarized_keys: set[str]) -> ConversationSummaryState:
+        self._repository.save_summary(conversation_id, text, summarized_keys)
+        state = self.get(conversation_id)
+        assert state is not None
+        return state
+
+    def clear(self, conversation_id: str) -> None:
+        self._repository.clear(conversation_id)
 
 
 class ConversationSummarizer:

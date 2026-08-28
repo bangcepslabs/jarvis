@@ -73,8 +73,11 @@ final class Live2DModel extends CubismUserModel {
         if (getRenderer() == null || width <= 0 || height <= 0) return;
         setRenderTargetSize(width, height);
         getModelMatrix().loadIdentity();
-        getModelMatrix().setHeight(2.25f);
-        getModelMatrix().setY(-0.20f);
+        // Medium-long portrait framing: leave breathing room above the head
+        // and let the lower body fall behind the overlay without stretching
+        // either axis.
+        getModelMatrix().setHeight(2.15f);
+        getModelMatrix().setY(-0.28f);
 
         // Keep model framing uniform. Correct the physical portrait viewport
         // aspect in a separate projection matrix instead of stretching the

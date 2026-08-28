@@ -37,7 +37,10 @@ class AvatarRendererConfig {
     );
     const expression = String.fromEnvironment(
       'JARVIS_LIVE2D_EXPRESSION',
-      defaultValue: '',
+      // Ellen's verified presentation expression hides the source-model
+      // watermark. Keep it as the safe default while allowing an explicit
+      // dart-define override for development comparisons.
+      defaultValue: 'shuiyin',
     );
     final configuredProfile = const String.fromEnvironment('JARVIS_AVATAR_PROFILE', defaultValue: 'placeholder');
     final profile = AvatarProfiles.byId(configuredProfile == 'placeholder' && renderer.toLowerCase() == 'live2d' ? 'ellen_dev' : configuredProfile);

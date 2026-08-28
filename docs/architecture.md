@@ -101,3 +101,12 @@ outside Git.
 v0.5.2 adds an out-of-process PC client and keeps the Core boundary HTTP-only:
 `PC microphone/file -> /api/stt/transcribe -> transcript -> /api/chat ->
 assistant text -> /api/tts/synthesize -> WAV -> optional local playback`.
+
+### Natural Conversation Personalization
+
+The Core keeps a stable persona and derives a small style hint from recent user
+turns. The API accepts an optional `response_mode` (`text` or `voice`), and the
+voice clients send `voice` so responses are short and conclusion-first. SQLite
+memory retrieval remains bounded and local: keyword overlap, memory key and
+category matches, recency, and source are used for ranking. Current conversation
+context is higher priority than long-term memory; neither can authorize tools.

@@ -6,7 +6,7 @@ from app.actions.models import ActionStatus, PendingAction, PendingActionSummary
 from app.actions.service import ActionConfirmationService
 from app.actions.store import ActiveActionExistsError
 from app.agent.models import AgentResponse, ChatMessage, ToolCallSummary
-from app.agent.prompt import SYSTEM_PROMPT
+from app.agent.prompt import build_system_prompt, infer_conversation_style
 from app.agent.tool_router import ToolRouter
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
@@ -72,7 +72,7 @@ class JarvisAgent:
         self._summary_min_new_turns = max(1, summary_min_new_turns)
         self._calibration = calibration or LLMCalibrationCollector()
 
-    async def respond(self, message: str, conversation_id: str = "default") -> AgentResponse:
+    async def respond(self, message: str, conversation_id: str = "default", response_mode: str | None = None) -> AgentResponse:
         active = await self._actions.get_active_action()
         if active is not None:
             if active.status == ActionStatus.EXPIRED:
@@ -104,10 +104,11 @@ class JarvisAgent:
         if self._memory:
             memories = await self._memory.search_memories(message)
         history = await self._context_messages(conversation_id, all_history=self._context_manager_explicit)
+        system_prompt = build_system_prompt(response_mode, infer_conversation_style(history))
         summary_state = self._summary_store.get(conversation_id) if self._summary_enabled else None
         summary_update = None
         selection = self._context_manager.build(
-            SYSTEM_PROMPT,
+            system_prompt,
             message,
             history,
             memories,
@@ -130,7 +131,7 @@ class JarvisAgent:
                     summarized_keys.update(conversation_turn_key(turn) for turn in new_dropped)
                     summary_state = self._summary_store.save(conversation_id, update.text, summarized_keys)
                     selection = self._context_manager.build(
-                        SYSTEM_PROMPT,
+                        system_prompt,
                         message,
                         history,
                         memories,

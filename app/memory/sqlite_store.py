@@ -1,4 +1,5 @@
 import asyncio
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -74,14 +75,36 @@ class SQLiteMemoryStore(MemoryStore):
         return await asyncio.to_thread(self._search, query, limit)
 
     def _search(self, query: str, limit: int) -> list[MemoryEntry]:
-        terms = [term for term in query.casefold().split() if len(term) >= 2][:8]
+        terms = list(self._tokens(query))[:12]
         if not terms:
             return []
-        clauses = " OR ".join("LOWER(memory_key) LIKE ? OR LOWER(content) LIKE ?" for _ in terms)
-        params = [value for term in terms for value in (f"%{term}%", f"%{term}%")]
+        clauses = " OR ".join("LOWER(memory_key) LIKE ? OR LOWER(content) LIKE ? OR LOWER(category) LIKE ?" for _ in terms)
+        params = [value for term in terms for value in (f"%{term}%", f"%{term}%", f"%{term}%")]
         with self._connect() as connection:
-            rows = connection.execute(f"SELECT * FROM memories WHERE {clauses} ORDER BY updated_at DESC LIMIT ?", (*params, limit)).fetchall()
-        return [self._entry(row) for row in rows]
+            rows = connection.execute(f"SELECT * FROM memories WHERE {clauses}", params).fetchall()
+        query_terms = set(terms)
+        ranked = []
+        now = datetime.now(UTC)
+        for row in rows:
+            key_terms = self._tokens(row["memory_key"])
+            content_terms = self._tokens(row["content"])
+            category_terms = self._tokens(row["category"])
+            key_overlap = len(query_terms & key_terms)
+            overlap = len(query_terms & (key_terms | content_terms | category_terms))
+            if overlap == 0:
+                continue
+            updated = datetime.fromisoformat(row["updated_at"])
+            age_days = max(0.0, (now - updated).total_seconds() / 86400)
+            score = overlap + key_overlap * 1.5 + (0.2 / (1 + age_days / 30))
+            if row["source"] == MemorySource.EXPLICIT.value:
+                score += 0.05
+            ranked.append((score, row["updated_at"], row))
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [self._entry(row) for _, _, row in ranked[: max(0, limit)]]
+
+    @staticmethod
+    def _tokens(value: str) -> set[str]:
+        return {token.casefold() for token in re.findall(r"[^\W_]+", value, flags=re.UNICODE) if len(token) >= 2}
 
     async def delete(self, memory_id: int) -> bool:
         return await asyncio.to_thread(self._delete, memory_id)

@@ -280,3 +280,16 @@ Core Restart Context Recovery: IMPLEMENTED / UNIT TESTED
 PendingAction Persistence: NOT IMPLEMENTED (runtime-only by policy)
 Summary -> Authorization: NOT ALLOWED
 Summary -> Persistent Memory automatic promotion: NOT IMPLEMENTED
+
+### Natural Conversation Personalization
+
+The stable JARVIS identity remains in the base system prompt while a bounded,
+deterministic style hint adapts to recent user turns. Chat requests may specify
+`response_mode` as `text` or `voice`; voice mode requests concise, conclusion-
+first spoken responses. Relevant long-term memory is ranked locally in SQLite
+by token overlap, key/category matches, recency, and explicit source, with a
+small retrieval budget. Current conversation context remains higher priority
+than persistent memory, and memory/Persona/context never grant authorization.
+
+Natural Conversation Personalization: IMPLEMENTED / UNIT TESTED
+Vector database, embeddings, and model fine-tuning: NOT IMPLEMENTED

@@ -110,7 +110,7 @@ def run_pipeline(
             text = str(stt["text"]).strip()
             print(f"You: {text}")
         stage_started = time.perf_counter()
-        chat = _request(client, "POST", _url(server, "/api/chat"), headers=headers, json={"message": text, "conversation_id": conversation_id}).json()
+        chat = _request(client, "POST", _url(server, "/api/chat"), headers=headers, json={"message": text, "conversation_id": conversation_id, "response_mode": "voice"}).json()
         chat_elapsed = time.perf_counter() - stage_started
         reply = str(chat.get("reply", "")).strip()
         if not reply:

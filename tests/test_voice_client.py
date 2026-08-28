@@ -27,6 +27,7 @@ def test_text_pipeline_skips_stt_and_forwards_conversation(capsys):
     assert len(fake.requests) == 2
     assert fake.requests[0][1].endswith("/api/chat")
     assert fake.requests[0][2]["json"]["conversation_id"] == "c1"
+    assert fake.requests[0][2]["json"]["response_mode"] == "voice"
     assert played == [b"RIFFWAV"]
     output = capsys.readouterr().out
     assert "stt_elapsed=skipped" in output
@@ -66,7 +67,7 @@ def test_file_pipeline_posts_stt_then_chat_then_tts_and_can_save(tmp_path):
     assert [request[1] for request in fake.requests] == [
         "http://core/api/stt/transcribe", "http://core/api/chat", "http://core/api/tts/synthesize"
     ]
-    assert fake.requests[1][2]["json"] == {"message": "자비스 부산 날씨", "conversation_id": "voice"}
+    assert fake.requests[1][2]["json"] == {"message": "자비스 부산 날씨", "conversation_id": "voice", "response_mode": "voice"}
     assert output.read_bytes() == b"RIFFWAV"
 
 

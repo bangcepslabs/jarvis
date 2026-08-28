@@ -46,7 +46,7 @@ class AvatarController extends ChangeNotifier {
       notifyListeners();
       final text = typed ?? await api.transcribe(bytes);
       if (text.isEmpty) return _fail('No speech detected');
-      reply = await api.chat(text, conversationId);
+      reply = await api.chat(text, conversationId, responseMode: 'voice');
       final audio = await api.synthesize(reply);
       state = AvatarState.speaking;
       notifyListeners();

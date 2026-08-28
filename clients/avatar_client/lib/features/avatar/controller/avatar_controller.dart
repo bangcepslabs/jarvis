@@ -1,5 +1,7 @@
 ﻿import 'package:audioplayers/audioplayers.dart';
 import 'package:cross_file/cross_file.dart';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
@@ -31,10 +33,26 @@ class AvatarController extends ChangeNotifier {
 
   Future<void> toggleRecording() async {
     if (_recording) {
-      final path = await _recorder.stop();
-      _recording = false;
-      notifyListeners();
-      if (path != null) await _run(await XFile(path).readAsBytes());
+      try {
+        final path = await _recorder.stop();
+        _recording = false;
+        notifyListeners();
+        if (path == null) return _fail('Recording did not produce audio');
+        final file = File(path);
+        if (!await file.exists()) return _fail('Recording file was not created');
+        try {
+          await _run(await XFile(path).readAsBytes());
+        } finally {
+          try {
+            await file.delete();
+          } catch (_) {
+            // Temporary recording cleanup must not mask the conversation result.
+          }
+        }
+      } catch (error) {
+        _recording = false;
+        _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
+      }
       return;
     }
     if (!await _recorder.hasPermission()) return _fail('Microphone permission required');
@@ -42,10 +60,16 @@ class AvatarController extends ChangeNotifier {
     _recording = true;
     errorMessage = null;
     notifyListeners();
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
-      path: 'recording.wav',
-    );
+    try {
+      final path = '${Directory.systemTemp.path}${Platform.pathSeparator}jarvis-recording-${DateTime.now().microsecondsSinceEpoch}.wav';
+      await _recorder.start(
+        const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
+        path: path,
+      );
+    } catch (error) {
+      _recording = false;
+      _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
+    }
   }
 
   Future<void> sendText(String text) async {

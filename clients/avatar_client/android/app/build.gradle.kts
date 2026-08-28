@@ -25,6 +25,16 @@ android {
         versionName = flutter.versionName
     }
 
+    flavorDimensions += "avatar"
+    productFlavors {
+        create("base") {
+            dimension = "avatar"
+        }
+        create("live2d") {
+            dimension = "avatar"
+        }
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -37,10 +47,10 @@ android {
 dependencies {
     val live2dCore = file("../live2d_sdk/Core/android/Live2DCubismCore.aar")
     if (live2dCore.exists()) {
-        implementation(files(live2dCore))
+        add("live2dImplementation", files(live2dCore))
     }
     if (project.findProject(":live2d_framework") != null) {
-        implementation(project(":live2d_framework"))
+        add("live2dImplementation", project(":live2d_framework"))
     }
 }
 

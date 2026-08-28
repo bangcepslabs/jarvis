@@ -11,6 +11,12 @@ directories. Keep secrets in ignored environment files, never in Git. Local
 development continues to load `.env`; production systemd loads
 `.env.production` explicitly through `EnvironmentFile`.
 
+If a server checkout previously used `.env` for production values, do not copy
+that file through Git or expose its contents. Create `.env.production` manually
+from `.env.example`, enter the production values yourself, and restore `.env`
+from the safe development template only when that checkout is used for local
+development or tests. systemd always uses `.env.production`, never `.env`.
+
 For a native install:
 
 ```bash
@@ -73,6 +79,14 @@ curl http://127.0.0.1:8000/health
 
 Preload trades slower startup and higher resident RAM for a faster first voice
 turn. A preload failure is isolated and lazy loading remains available.
+
+## Test isolation
+
+`pytest` sets its own process-level test configuration before application
+imports: mock LLM, disabled client auth, disabled web search, and disabled model
+preload. These values override any repository `.env` or systemd production
+environment, so the normal test suite never calls Groq or Tavily. Provider smoke
+tests remain opt-in scripts, not default pytest behavior.
 
 ## Persistent paths
 

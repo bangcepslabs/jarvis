@@ -53,5 +53,5 @@ async def test_openai_compatible_provider_parses_native_tool_call(monkeypatch) -
     assert response.tool_calls[0].name == "get_current_time"
     assert response.tool_calls[0].arguments == {}
     assert FakeAsyncClient.last_payload["model"] == "test-model"
-    assert FakeAsyncClient.last_payload["tools"] == []
-    assert FakeAsyncClient.last_payload["tool_choice"] == "none"
+    assert "tools" not in FakeAsyncClient.last_payload
+    assert "tool_choice" not in FakeAsyncClient.last_payload

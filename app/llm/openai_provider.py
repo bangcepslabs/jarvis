@@ -42,11 +42,10 @@ class OpenAICompatibleProvider(LLMProvider):
             payload["response_format"] = response_format
         if reasoning_format:
             payload["reasoning_format"] = reasoning_format
-        if tools is not None:
+        if tools:
             payload["tools"] = tools
             payload["tool_choice"] = tool_choice or ("auto" if tools else "none")
-            if tools:
-                payload["parallel_tool_calls"] = False
+            payload["parallel_tool_calls"] = False
         headers = {"Authorization": f"Bearer {self._settings.llm_api_key}", "Content-Type": "application/json"}
         logger.info("llm_request_started provider=openai_compatible")
         try:
@@ -64,7 +63,14 @@ class OpenAICompatibleProvider(LLMProvider):
             raise
         except (httpx.HTTPError, ValueError) as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            logger.exception("provider_error provider=openai_compatible status=%s", status)
+            logger.exception(
+                "provider_error provider=openai_compatible status=%s error_code=%s error_type=%s error_message=%s failed_generation_reason=%s",
+                status,
+                self.last_error_metadata.get("error_code"),
+                self.last_error_metadata.get("error_type"),
+                self.last_error_metadata.get("error_message"),
+                self.last_error_metadata.get("failed_generation_reason"),
+            )
             raise LLMProviderError("The AI service is currently unavailable.") from exc
         try:
             message = body["choices"][0]["message"]
@@ -73,7 +79,7 @@ class OpenAICompatibleProvider(LLMProvider):
             result = LLMResponse(content=message.get("content"), tool_calls=calls, finish_reason=body["choices"][0].get("finish_reason"), usage=LLMUsage(**usage) if isinstance(usage, dict) else None, rate_limit=rate_limit)
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError("The AI service returned an invalid response.") from exc
-        logger.info("llm_request_completed provider=openai_compatible model=%s tool_calls=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s remaining_requests=%s remaining_tokens=%s", self._settings.llm_model, len(result.tool_calls), getattr(result.usage, "prompt_tokens", None), getattr(result.usage, "completion_tokens", None), getattr(result.usage, "total_tokens", None), getattr(result.rate_limit, "remaining_requests", None), getattr(result.rate_limit, "remaining_tokens", None))
+        logger.info("llm_request_completed provider=openai_compatible model=%s tool_calls=%s prompt_tokens=%s completion_tokens=%s total_tokens=%s remaining_requests=%s remaining_tokens=%s", model or self._settings.llm_model, len(result.tool_calls), getattr(result.usage, "prompt_tokens", None), getattr(result.usage, "completion_tokens", None), getattr(result.usage, "total_tokens", None), getattr(result.rate_limit, "remaining_requests", None), getattr(result.rate_limit, "remaining_tokens", None))
         return result
 
     @staticmethod

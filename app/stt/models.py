@@ -14,3 +14,4 @@ class TranscriptionResult(BaseModel):
     duration_seconds: float | None = None
     speech_detected: bool = True
     segments: list[TranscriptSegment] | None = None
+    timings_ms: dict[str, int] | None = None

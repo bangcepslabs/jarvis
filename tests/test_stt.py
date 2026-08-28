@@ -32,6 +32,19 @@ async def test_stt_service_transcribes_and_handles_empty():
 
 
 @pytest.mark.asyncio
+async def test_stt_service_preserves_provider_timings():
+    result = TranscriptionResult(
+        text="ok",
+        timings_ms={"temp_file_write_ms": 2, "inference_ms": 42},
+    )
+    measured = await STTService(FakeSTT(result=result), timeout_seconds=1).transcribe(b"wav", "sample.wav")
+    assert measured.timings_ms is not None
+    assert measured.timings_ms["temp_file_write_ms"] == 2
+    assert measured.timings_ms["inference_ms"] == 42
+    assert measured.timings_ms["queue_wait_ms"] >= 0
+
+
+@pytest.mark.asyncio
 async def test_stt_service_file_size_and_timeout():
     with pytest.raises(AudioTooLargeError):
         await STTService(FakeSTT(), max_file_mb=1).transcribe(b"x" * (1024 * 1024 + 1))

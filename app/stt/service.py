@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 
 from app.stt.exceptions import AudioTooLargeError, STTDisabledError, STTProviderError, STTTimeoutError
 from app.stt.models import TranscriptionResult
@@ -22,7 +23,9 @@ class STTService:
             raise AudioTooLargeError("The audio file is too large.")
         if not audio:
             return TranscriptionResult(text="", speech_detected=False)
+        queued_at = time.perf_counter()
         async with self._semaphore:
+            queue_wait_ms = round((time.perf_counter() - queued_at) * 1000)
             try:
                 result = await asyncio.wait_for(self._provider.transcribe(audio, filename), timeout=self._timeout)
             except asyncio.TimeoutError as exc:
@@ -33,9 +36,10 @@ class STTService:
             except Exception as exc:
                 logger.warning("stt_provider_failed provider=%s error_type=%s", type(self._provider).__name__, type(exc).__name__)
                 raise STTProviderError("Speech transcription is currently unavailable.") from exc
+        timings_ms = {**(result.timings_ms or {}), "queue_wait_ms": queue_wait_ms}
         if not result.text.strip():
-            return result.model_copy(update={"text": "", "speech_detected": False})
-        return result
+            return result.model_copy(update={"text": "", "speech_detected": False, "timings_ms": timings_ms})
+        return result.model_copy(update={"timings_ms": timings_ms})
 
     async def preload(self) -> None:
         preload = getattr(self._provider, "preload", None)

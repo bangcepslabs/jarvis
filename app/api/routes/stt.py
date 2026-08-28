@@ -20,16 +20,23 @@ async def transcribe(file: UploadFile = File(...)) -> dict[str, object]:
         started = time.perf_counter()
         result = await service.transcribe(audio, file.filename)
         elapsed_ms = round((time.perf_counter() - started) * 1000)
+        audio_duration_ms = round((result.duration_seconds or 0) * 1000)
+        timing = {
+            "audio_duration_ms": audio_duration_ms,
+            "server_stt_total_ms": elapsed_ms,
+            **(result.timings_ms or {}),
+        }
         logger.info(
-            "stt_result language=%s chars=%s empty=%s elapsed_ms=%s",
+            "stt_result language=%s chars=%s empty=%s audio_duration_ms=%s timings=%s",
             result.language or "unknown",
             len(result.text.strip()),
             not bool(result.text.strip()),
-            elapsed_ms,
+            audio_duration_ms,
+            timing,
         )
-        payload = result.model_dump(exclude={"segments"})
+        payload = result.model_dump(exclude={"segments", "timings_ms"})
         if get_settings().voice_latency_metrics:
-            payload["_timing"] = {"stt_total_ms": elapsed_ms}
+            payload["_timing"] = timing
         return payload
     except AudioTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc

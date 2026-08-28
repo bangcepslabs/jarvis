@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import tempfile
+import time
 from pathlib import Path
 
 from app.stt.exceptions import STTProviderError
@@ -45,14 +46,25 @@ class FasterWhisperProvider(STTProvider):
 
     async def transcribe(self, audio: bytes, filename: str | None = None) -> TranscriptionResult:
         suffix = Path(filename or "audio.wav").suffix or ".wav"
+        timings_ms: dict[str, int] = {}
         try:
             if self._temp_dir:
                 Path(self._temp_dir).mkdir(parents=True, exist_ok=True)
+            file_started = time.perf_counter()
             with tempfile.NamedTemporaryFile(prefix="jarvis-stt-", suffix=suffix, dir=self._temp_dir, delete=False) as handle:
                 path = Path(handle.name)
                 handle.write(audio)
+            timings_ms["temp_file_write_ms"] = round((time.perf_counter() - file_started) * 1000)
             try:
-                return await asyncio.to_thread(self._transcribe_file, await self._get_model(), path)
+                model_started = time.perf_counter()
+                model_reused = self._model is not None
+                model = await self._get_model()
+                timings_ms["model_acquire_ms"] = round((time.perf_counter() - model_started) * 1000)
+                inference_started = time.perf_counter()
+                result = await asyncio.to_thread(self._transcribe_file, model, path)
+                timings_ms["inference_ms"] = round((time.perf_counter() - inference_started) * 1000)
+                timings_ms["model_reused"] = int(model_reused)
+                return result.model_copy(update={"timings_ms": timings_ms})
             finally:
                 path.unlink(missing_ok=True)
         except STTProviderError:

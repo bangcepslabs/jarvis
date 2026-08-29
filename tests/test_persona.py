@@ -18,6 +18,21 @@ def test_persona_allows_harmless_banter_without_safety_lecture():
     assert "Only introduce a boundary" in SYSTEM_PROMPT
 
 
+def test_persona_does_not_add_unsolicited_ai_or_wording_meta_commentary():
+    assert "Do not volunteer that you are an AI" in SYSTEM_PROMPT
+    assert "Do not correct or morally evaluate harmless wording" in SYSTEM_PROMPT
+    assert "Answer questions about your own body or nature factually only when directly asked" in SYSTEM_PROMPT
+
+
+def test_profile_handles_harmless_adult_appearance_chat_naturally():
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
+    behavior = " ".join(DEFAULT_CHARACTER_PROFILE.behavior_rules)
+    assert "do not correct wording" in rules
+    assert "unless the user directly asks" in behavior
+
+
 def test_profile_keeps_banter_natural_and_does_not_store_one_off_adult_remarks():
     from app.character.profile import DEFAULT_CHARACTER_PROFILE
 

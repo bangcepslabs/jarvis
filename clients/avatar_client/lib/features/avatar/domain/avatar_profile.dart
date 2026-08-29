@@ -13,14 +13,29 @@ class AvatarProfile {
     this.mouthOpenParameter = 'ParamMouthOpenY', this.mouthFormParameter = 'ParamMouthForm',
     this.blinkParameterIds = const ['ParamEyeLOpen', 'ParamEyeROpen'],
     this.breathParameterIds = const ['ParamBreath'], this.mouthMin = 0, this.mouthMax = 1,
-    this.mouthGain = 2.1, this.expressionMappings = const {}, this.ambientMotions = const ['idle', 'idle2'],
-    this.reactionMotions = const {}, this.excludedAutoExpressions = const {'shuiyin'},
+    this.mouthGain = 1.0, this.mouthMaxOpen = 0.72, this.mouthNoiseGate = 0.04,
+    this.mouthAttackSeconds = 0.055, this.mouthReleaseSeconds = 0.14,
+    this.expressionMappings = const {
+      AvatarEmotion.happy: 'red',
+      AvatarEmotion.excited: 'tang',
+      AvatarEmotion.surprised: 'shock',
+      AvatarEmotion.concerned: 'black',
+      AvatarEmotion.thinking: 'shou',
+      AvatarEmotion.playful: 'red',
+    },
+    this.ambientMotions = const ['idle', 'idle2'],
+    this.reactionMotions = const {
+      AvatarMotionIntent.positive: 'idle2',
+      AvatarMotionIntent.reaction: 'idle2',
+    },
+    this.excludedAutoExpressions = const {'shuiyin'},
     this.framing = const AvatarFraming(), this.supportsExpressions = true,
-    this.supportsReactionMotions = false, this.supportsLipSync = true,
+    this.supportsReactionMotions = true, this.supportsLipSync = true,
   });
   final String id, displayName, renderer, modelAsset, mouthOpenParameter, mouthFormParameter;
   final List<String> blinkParameterIds, breathParameterIds, ambientMotions;
-  final double mouthMin, mouthMax, mouthGain;
+  final double mouthMin, mouthMax, mouthGain, mouthMaxOpen, mouthNoiseGate;
+  final double mouthAttackSeconds, mouthReleaseSeconds;
   final Map<AvatarEmotion, String> expressionMappings;
   final Map<AvatarMotionIntent, String> reactionMotions;
   final Set<String> excludedAutoExpressions;

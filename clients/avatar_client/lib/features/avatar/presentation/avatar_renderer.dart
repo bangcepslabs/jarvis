@@ -118,17 +118,29 @@ Map<String, Object> live2DUpdateParams(
   AvatarPresentationHint hint,
   double mouthOpen,
 ) {
-  final reactionMotion = state == AvatarState.speaking ? config.profile.reactionMotions[hint.motionIntent] : null;
+  final reactionMotion = state == AvatarState.speaking && config.profile.supportsReactionMotions
+      ? config.profile.reactionMotions[hint.motionIntent]
+      : null;
+  final mappedExpression = config.profile.expressionFor(hint.emotion);
+  final expression = config.expression == 'shuiyin'
+      ? (mappedExpression ?? config.expression)
+      : config.expression;
   return {
     'modelAsset': config.modelAsset,
     'motion': reactionMotion ?? (config.profile.ambientMotions.isEmpty ? 'idle' : config.profile.ambientMotions.first),
     'state': state.name,
-    'expression': config.expression.isNotEmpty ? config.expression : (config.profile.expressionFor(hint.emotion) ?? ''),
+    // Keep the watermark-hiding default for neutral responses, but allow
+    // verified model expressions to override it for emotional responses.
+    'expression': expression,
     'mouthOpenParameter': config.profile.mouthOpenParameter,
     'mouthFormParameter': config.profile.mouthFormParameter,
     'mouthMin': config.profile.mouthMin,
     'mouthMax': config.profile.mouthMax,
     'mouthGain': config.profile.mouthGain,
+    'mouthMaxOpen': config.profile.mouthMaxOpen,
+    'mouthNoiseGate': config.profile.mouthNoiseGate,
+    'mouthAttackSeconds': config.profile.mouthAttackSeconds,
+    'mouthReleaseSeconds': config.profile.mouthReleaseSeconds,
     'emotion': hint.emotion.name,
     'intensity': hint.intensity,
     'motionIntent': hint.motionIntent.name,
@@ -136,6 +148,10 @@ Map<String, Object> live2DUpdateParams(
     'mouthOpen': mouthOpen,
   };
 }
+
+Map<String, Object> live2DHostLifecycleParams(AppLifecycleState state) => {
+  'resumed': state == AppLifecycleState.resumed,
+};
 
 class _Live2DPlatformView extends StatefulWidget {
   const _Live2DPlatformView({required this.config, required this.state, required this.hint, required this.mouthOpen});
@@ -149,20 +165,73 @@ class _Live2DPlatformView extends StatefulWidget {
   State<_Live2DPlatformView> createState() => _Live2DPlatformViewState();
 }
 
-class _Live2DPlatformViewState extends State<_Live2DPlatformView> {
-  MethodChannel? _channel;
+class _Live2DPlatformViewState extends State<_Live2DPlatformView>
+    with WidgetsBindingObserver {
+  static const _channel = MethodChannel('jarvis/live2d/texture');
+  int? _textureId;
+  bool _released = false;
 
   Map<String, Object> get _params => live2DUpdateParams(widget.config, widget.state, widget.hint, widget.mouthOpen);
 
-  void _created(int viewId) {
-    _channel = MethodChannel('jarvis/live2d/$viewId');
-    _sendUpdate();
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _createTexture();
+  }
+
+  Future<void> _createTexture() async {
+    try {
+      final textureId = await _channel.invokeMethod<int>('create', _params);
+      if (!mounted || _released || textureId == null) return;
+      setState(() => _textureId = textureId);
+      _sendLifecycle(AppLifecycleState.resumed);
+    } catch (_) {
+      // Keep the existing UI available if the optional native renderer fails.
+    }
   }
 
   void _sendUpdate() {
-    final channel = _channel;
-    if (channel == null) return;
-    channel.invokeMethod<void>('update', _params).catchError((_) {});
+    if (_released) return;
+    _channel.invokeMethod<void>('update', _params).catchError((_) {});
+  }
+
+  Future<void> _sendLifecycle(AppLifecycleState state) async {
+    if (_released) return;
+    // Detach the old Flutter texture before the native SurfaceTexture entry
+    // is released/replaced. Keeping a Texture widget bound to a released
+    // entry can leave the compositor white after background/foreground.
+    if (state != AppLifecycleState.resumed && mounted && _textureId != null) {
+      setState(() => _textureId = null);
+    }
+    if (state == AppLifecycleState.resumed && mounted && _textureId != null) {
+      setState(() => _textureId = null);
+    }
+    try {
+      final textureId = await _channel.invokeMethod<Object?>(
+        'lifecycle',
+        live2DHostLifecycleParams(state),
+      );
+      if (state == AppLifecycleState.resumed && textureId is int && mounted && !_released) {
+        setState(() => _textureId = textureId);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _sendLifecycle(state);
+      case AppLifecycleState.inactive:
+        // Android emits inactive during normal foreground transitions. Pausing
+        // the GLSurfaceView here can leave its surface blank before resumed.
+        break;
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _sendLifecycle(state);
+    }
   }
 
   @override
@@ -174,12 +243,21 @@ class _Live2DPlatformViewState extends State<_Live2DPlatformView> {
   }
 
   @override
-  Widget build(BuildContext context) => AndroidView(
-    viewType: 'jarvis/live2d',
-    creationParams: _params,
-    creationParamsCodec: const StandardMessageCodec(),
-    onPlatformViewCreated: _created,
-  );
+  void dispose() {
+    _released = true;
+    _channel.invokeMethod<void>('release').catchError((_) {});
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textureId = _textureId;
+    if (textureId == null) {
+      return const ColoredBox(color: Color(0xff0a1c2e));
+    }
+    return Texture(textureId: textureId);
+  }
 }
 
 class AvatarRendererHost extends StatelessWidget {

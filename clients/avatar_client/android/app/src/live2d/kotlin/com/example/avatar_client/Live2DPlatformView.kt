@@ -10,6 +10,7 @@ import android.net.Uri
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
+import android.view.SurfaceHolder
 import android.widget.FrameLayout
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicLong
@@ -51,16 +52,27 @@ class Live2DPlatformView(context: Context, id: Int, messenger: BinaryMessenger, 
         }
         channel.setMethodCallHandler(this)
         if (params != null) view.update(params)
+        view.resumeRendering()
     }
 
     override fun getView(): View = container
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
-        if (call.method != "update" || call.arguments !is Map<*, *>) {
-            result.notImplemented()
-            return
+        when (call.method) {
+            "update" -> {
+                if (call.arguments !is Map<*, *>) {
+                    result.error("invalid_arguments", "update requires a parameter map", null)
+                    return
+                }
+                view.update(call.arguments as Map<*, *>)
+                result.success(null)
+            }
+            "lifecycle" -> {
+                val params = call.arguments as? Map<*, *>
+                view.setHostResumed(params?.get("resumed") as? Boolean ?: false)
+                result.success(null)
+            }
+            else -> result.notImplemented()
         }
-        view.update(call.arguments as Map<*, *>)
-        result.success(null)
     }
 
     override fun dispose() {
@@ -110,13 +122,43 @@ private class Live2DGlView(context: Context, private val root: File?, private va
 
     init {
         setEGLContextClientVersion(2)
+        setPreserveEGLContextOnPause(true)
         setRenderer(liveRenderer)
         renderMode = RENDERMODE_CONTINUOUSLY
+        holder.addCallback(object : SurfaceHolder.Callback {
+            override fun surfaceCreated(holder: SurfaceHolder) {
+                Log.i("JARVIS_LIVE2D", "surface_created size=${width}x${height}")
+            }
+
+            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+                Log.i("JARVIS_LIVE2D", "surface_changed size=${width}x${height}")
+            }
+
+            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                Log.i("JARVIS_LIVE2D", "surface_destroyed")
+                Log.i("JARVIS_LIVE2D", "egl_surface_destroyed")
+            }
+        })
+    }
+
+    fun setHostResumed(resumed: Boolean) {
+        if (resumed) resumeRendering() else pauseRendering()
+    }
+
+    fun resumeRendering() {
+        Log.i("JARVIS_LIVE2D", "host lifecycle=resumed")
+        onResume()
+        requestRender()
+    }
+
+    fun pauseRendering() {
+        Log.i("JARVIS_LIVE2D", "host lifecycle=paused")
+        onPause()
     }
 
     fun release() {
         queueEvent { liveRenderer.release() }
-        onPause()
+        pauseRendering()
     }
 
     fun update(params: Map<*, *>) {
@@ -125,7 +167,7 @@ private class Live2DGlView(context: Context, private val root: File?, private va
     }
 }
 
-private class Live2DRenderer(
+class Live2DRenderer(
     private val root: File?,
     private val modelFile: File?,
     private val assets: android.content.res.AssetManager,
@@ -162,13 +204,19 @@ private class Live2DRenderer(
             update.string("state", "idle"),
             update.string("expression", ""),
             update.string("motion", ""),
+            update.string("reaction", "none"),
             update.number("intensity", 0.3f),
         )
-        target.setMouthOpen(update.number("mouthOpen", 0f))
+        target.setMouthTarget(
+            update.number("mouthOpen", 0f),
+            update.number("mouthMaxOpen", 0.72f),
+            update.number("mouthNoiseGate", 0.04f),
+        )
         pendingUpdate = null
     }
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        Log.i("JARVIS_LIVE2D", "egl_surface_created")
         GLES20.glClearColor(0.06f, 0.17f, 0.26f, 1f)
         if (root == null || modelFile == null) return
         try {
@@ -181,6 +229,10 @@ private class Live2DRenderer(
                 initial.number("mouthMin", 0f),
                 initial.number("mouthMax", 1f),
                 initial.number("mouthGain", 1f),
+                initial.number("mouthMaxOpen", 0.72f),
+                initial.number("mouthNoiseGate", 0.04f),
+                initial.number("mouthAttackSeconds", 0.055f),
+                initial.number("mouthReleaseSeconds", 0.14f),
             )
             if (expression.isNotEmpty()) {
                 val applied = model!!.applyExpression(expression)
@@ -211,12 +263,14 @@ private class Live2DRenderer(
     }
 
     override fun onSurfaceChanged(gl: GL10?, width: Int, height: Int) {
+        Log.i("JARVIS_LIVE2D", "renderer_resumed size=${width}x${height}")
         GLES20.glViewport(0, 0, width, height)
         model?.updateViewport(width, height)
     }
 
     override fun onDrawFrame(gl: GL10?) {
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT)
+        applyPendingUpdate()
         val now = System.nanoTime()
         val rawDeltaNanos = if (lastNanos == 0L) 1_000_000_000L / 60L else now - lastNanos
         val rawDeltaSeconds = rawDeltaNanos / 1_000_000_000f

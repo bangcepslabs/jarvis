@@ -67,8 +67,18 @@ class Settings(BaseSettings):
     stt_device: str = "cpu"
     stt_compute_type: str = "int8"
     stt_language: str | None = "ko"
-    stt_beam_size: int = 1
+    stt_beam_size: int = Field(1, ge=1)
+    stt_best_of: int | None = Field(None, ge=1)
+    stt_patience: float | None = Field(None, gt=0)
+    stt_temperature: float | None = Field(None, ge=0)
     stt_vad_filter: bool = True
+    stt_vad_min_silence_duration_ms: int | None = Field(None, ge=0)
+    stt_vad_speech_pad_ms: int | None = Field(None, ge=0)
+    stt_vad_threshold: float | None = Field(None, ge=0, le=1)
+    stt_bias_terms: str = ""
+    stt_bias_prompt_max_chars: int = Field(400, ge=1)
+    stt_transcript_correction_enabled: bool = False
+    stt_known_terms: str = ""
     stt_cpu_threads: int = Field(0, ge=0, validation_alias=AliasChoices("STT_CPU_THREADS", "JARVIS_STT_CPU_THREADS"))
     stt_preload: bool = Field(False, validation_alias=AliasChoices("STT_PRELOAD", "JARVIS_STT_PRELOAD"))
     stt_timeout_seconds: float = 60.0

@@ -39,11 +39,18 @@ final class Live2DModel extends CubismUserModel {
     private final float mouthMin;
     private final float mouthMax;
     private final float mouthGain;
+    private final float mouthMaxOpen;
+    private final float mouthNoiseGate;
+    private final float mouthAttackSeconds;
+    private final float mouthReleaseSeconds;
+    private float mouthTarget;
+    private float mouthApplied;
+    private int mouthParameterIndex = -1;
     private String lastExpression = "";
     private String lastMotion = "";
     private String lastState = "";
 
-    Live2DModel(File root, File model3Json, String mouthParameterName, float mouthMin, float mouthMax, float mouthGain) throws IOException {
+    Live2DModel(File root, File model3Json, String mouthParameterName, float mouthMin, float mouthMax, float mouthGain, float mouthMaxOpen, float mouthNoiseGate, float mouthAttackSeconds, float mouthReleaseSeconds) throws IOException {
         this.root = root;
         setting = new CubismModelSettingJson(Files.readAllBytes(model3Json.toPath()));
         loadModel(read(setting.getModelFileName()));
@@ -51,6 +58,17 @@ final class Live2DModel extends CubismUserModel {
         this.mouthMin = mouthMin;
         this.mouthMax = mouthMax;
         this.mouthGain = mouthGain;
+        this.mouthMaxOpen = Math.max(0f, Math.min(1f, mouthMaxOpen));
+        this.mouthNoiseGate = Math.max(0f, Math.min(1f, mouthNoiseGate));
+        this.mouthAttackSeconds = Math.max(0.001f, mouthAttackSeconds);
+        this.mouthReleaseSeconds = Math.max(0.001f, mouthReleaseSeconds);
+        mouthParameterIndex = getModel().getParameterIndex(mouthParameterId);
+        if (mouthParameterIndex >= 0 && mouthParameterIndex < getModel().getParameterCount()) {
+            Log.i("JARVIS_LIVE2D", "mouthParameter=" + mouthParameterName +
+                    " min=" + getModel().getParameterMinimumValue(mouthParameterIndex) +
+                    " default=" + getModel().getParameterDefaultValue(mouthParameterIndex) +
+                    " max=" + getModel().getParameterMaximumValue(mouthParameterIndex));
+        }
         if (!setting.getPhysicsFileName().isEmpty()) loadPhysics(read(setting.getPhysicsFileName()));
         for (int i = 0; i < setting.getExpressionCount(); i++) {
             CubismExpressionMotion expression = loadExpression(
@@ -139,6 +157,7 @@ final class Live2DModel extends CubismUserModel {
         eyeBlink.updateParameters(getModel(), deltaSeconds);
         breath.updateParameters(getModel(), deltaSeconds);
         if (physics != null) physics.evaluate(getModel(), deltaSeconds);
+        updateMouth(deltaSeconds);
         getModel().update();
     }
 
@@ -186,8 +205,9 @@ final class Live2DModel extends CubismUserModel {
         return expressionManager.startMotionPriority(expression, 1) >= 0;
     }
 
-    void applyRuntimeUpdate(String state, String expression, String motion, float intensity) {
+    void applyRuntimeUpdate(String state, String expression, String motion, String reaction, float intensity) {
         if (state == null) state = "idle";
+        String previousState = lastState;
         if (!state.equals(lastState)) {
             Log.i("JARVIS_LIVE2D", "state changed=" + state);
             lastState = state;
@@ -202,31 +222,58 @@ final class Live2DModel extends CubismUserModel {
             }
             lastExpression = expression;
         }
-        if (!motion.equals(lastMotion)) {
+        if (!motion.equals(lastMotion) ||
+                (!"none".equals(reaction) && "speaking".equals(state) && !"speaking".equals(previousState))) {
             CubismMotion selected = findMotion(motion);
+            if (!"none".equals(reaction) && idleMotions.size() > 1) {
+                int nextIndex = (idleMotionIndex + 1) % idleMotions.size();
+                selected = idleMotions.get(nextIndex);
+                idleMotionIndex = nextIndex;
+                motion = "idle" + (nextIndex == 0 ? "" : "2");
+            }
             if (selected == null) {
                 Log.i("JARVIS_LIVE2D", "motion skipped=" + motion);
             } else {
                 motionManager.startMotionPriority(selected, 1);
-                Log.i("JARVIS_LIVE2D", "motion applied=" + motion);
+                Log.i("JARVIS_LIVE2D", "motion applied=" + motion + " reaction=" + reaction);
             }
             lastMotion = motion;
         }
     }
 
-    void setMouthOpen(float value) {
-        float clamped = Math.max(mouthMin, Math.min(mouthMax, value * mouthGain));
-        int parameterIndex = getModel().getParameterIndex(mouthParameterId);
-        if (parameterIndex >= getModel().getParameterCount()) {
+    void setMouthTarget(float value, float configuredMaxOpen, float configuredNoiseGate) {
+        float maxOpen = Math.max(0f, Math.min(1f, Math.min(mouthMaxOpen, configuredMaxOpen)));
+        float noiseGate = Math.max(0f, Math.min(1f, Math.max(mouthNoiseGate, configuredNoiseGate)));
+        float normalized = value <= noiseGate ? 0f : (value - noiseGate) / (1f - noiseGate);
+        normalized = Math.max(0f, Math.min(1f, normalized * mouthGain));
+        // A shallow curve keeps quiet speech visible while preventing loud
+        // syllables from dwelling at the model's maximum mouth opening.
+        mouthTarget = (float) Math.sqrt(normalized) * maxOpen;
+    }
+
+    private void updateMouth(float deltaSeconds) {
+        if (mouthParameterIndex < 0 || mouthParameterIndex >= getModel().getParameterCount()) {
             Log.i("JARVIS_LIVE2D", "mouth skipped=" + mouthParameterId.getString());
             return;
         }
-        getModel().setParameterValue(mouthParameterId, clamped);
+        float seconds = mouthTarget > mouthApplied ? mouthAttackSeconds : mouthReleaseSeconds;
+        float alpha = 1f - (float) Math.exp(-Math.max(0f, deltaSeconds) / seconds);
+        mouthApplied += (mouthTarget - mouthApplied) * alpha;
+        float min = getModel().getParameterMinimumValue(mouthParameterIndex);
+        float max = getModel().getParameterMaximumValue(mouthParameterIndex);
+        float parameterValue = min + (max - min) * mouthApplied;
+        getModel().setParameterValue(mouthParameterId, Math.max(min, Math.min(max, parameterValue)));
     }
 
     private CubismMotion findMotion(String name) {
         if (name == null || name.isEmpty()) return null;
         String normalized = name.toLowerCase(Locale.ROOT);
+        if (normalized.equals("idle")) {
+            return idleMotions.isEmpty() ? null : idleMotions.get(0);
+        }
+        if (normalized.equals("idle2")) {
+            return idleMotions.size() < 2 ? null : idleMotions.get(1);
+        }
         for (Map.Entry<String, CubismMotion> entry : motions.entrySet()) {
             if (entry.getKey().startsWith(normalized + ":")) return entry.getValue();
         }

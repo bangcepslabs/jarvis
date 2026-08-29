@@ -7,8 +7,9 @@ void main() {
     expect(AvatarProfiles.byId('missing').id, 'placeholder');
   });
 
-  test('unverified expression mappings are a safe no-op', () {
-    expect(AvatarProfiles.ellenDev.expressionFor(AvatarEmotion.happy), isNull);
+  test('Ellen maps expressions present in its model registry', () {
+    expect(AvatarProfiles.ellenDev.expressionFor(AvatarEmotion.happy), 'red');
+    expect(AvatarProfiles.ellenDev.expressionFor(AvatarEmotion.surprised), 'shock');
     expect(AvatarProfiles.ellenDev.expressionFor(AvatarEmotion.neutral), isNull);
   });
 

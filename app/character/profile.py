@@ -15,6 +15,27 @@ class CharacterProfile:
     response_rules: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class AvatarIdentity:
+    """Verified visual identity, kept separate so the active model can change."""
+
+    avatar_name: str
+    avatar_model: str
+    visual_identity: str
+    appearance_description: str
+    visible_traits: tuple[str, ...] = ()
+    optional_outfit_style: str | None = None
+
+
+DEFAULT_AVATAR_IDENTITY = AvatarIdentity(
+    avatar_name="Ellen",
+    avatar_model="ellen_dev",
+    visual_identity="JARVIS's active Live2D visual avatar on the Android client",
+    appearance_description="A Live2D avatar represented by the active Ellen model asset; only profile-verified appearance details should be discussed.",
+    visible_traits=("Live2D visual representation",),
+)
+
+
 DEFAULT_CHARACTER_PROFILE = CharacterProfile(
     name="JARVIS",
     identity="the user's personal AI assistant",

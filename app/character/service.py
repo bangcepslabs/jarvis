@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from app.character.context import build_character_context
-from app.character.profile import CharacterProfile, DEFAULT_CHARACTER_PROFILE
+from app.character.profile import AvatarIdentity, CharacterProfile, DEFAULT_AVATAR_IDENTITY, DEFAULT_CHARACTER_PROFILE
 
 
 @dataclass
@@ -14,11 +14,12 @@ class ConversationState:
 class CharacterBrain:
     """Small in-memory character continuity layer, independent of authorization."""
 
-    def __init__(self, profile: CharacterProfile = DEFAULT_CHARACTER_PROFILE) -> None:
+    def __init__(self, profile: CharacterProfile = DEFAULT_CHARACTER_PROFILE, avatar_identity: AvatarIdentity = DEFAULT_AVATAR_IDENTITY) -> None:
         self.profile = profile
+        self.avatar_identity = avatar_identity
         self._states: dict[str, ConversationState] = {}
 
-    def context(self, conversation_id: str, available_tool_names: tuple[str, ...] = ()) -> str:
+    def context(self, conversation_id: str, available_tool_names: tuple[str, ...] = (), *, current_expression: str | None = None, current_motion: str | None = None) -> str:
         state = self._states.get(conversation_id, ConversationState())
         return build_character_context(
             self.profile,
@@ -26,6 +27,9 @@ class CharacterBrain:
             recent_user_intent=state.recent_user_intent,
             last_assistant_action=state.last_assistant_action,
             available_tool_names=available_tool_names,
+            avatar_identity=self.avatar_identity,
+            current_expression=current_expression,
+            current_motion=current_motion,
         )
 
     def observe(self, conversation_id: str, user_message: str, response) -> None:
@@ -39,4 +43,3 @@ class CharacterBrain:
             state.last_assistant_action = response.pending_action.tool_name
         else:
             state.last_assistant_action = "conversation"
-

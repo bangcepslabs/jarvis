@@ -1,3 +1,4 @@
+import logging
 import pytest
 from pydantic import BaseModel, Field
 
@@ -52,7 +53,8 @@ def _agent(provider: LLMProvider, tool: JarvisTool) -> JarvisAgent:
 
 
 @pytest.mark.asyncio
-async def test_native_tool_call_executes_and_feeds_result_back() -> None:
+async def test_native_tool_call_executes_and_feeds_result_back(caplog) -> None:
+    caplog.set_level(logging.DEBUG, logger="app.agent.jarvis_agent")
     provider = FakeProvider(LLMToolCall(id="1", name="required_tool", arguments={"value": 3}))
     response = await _agent(provider, RequiredTool()).respond("컴퓨터가 바빠?")
     assert response.reply == "Final answer from tool data."
@@ -64,6 +66,9 @@ async def test_native_tool_call_executes_and_feeds_result_back() -> None:
     assert provider.requests[1][-1].role == "tool"
     assert '"success": true' in provider.requests[1][-1].content
     assert '"value": 3' in provider.requests[1][-1].content
+    assert "stage=main_llm_raw" in caplog.text
+    assert "stage=tool_final_llm_raw" in caplog.text
+    assert "stage=final_user_response" in caplog.text
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,12 @@ logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_REQUEST = 1
 
 
+def _trace_response(stage: str, text: str | None) -> None:
+    """Expose response provenance only at DEBUG; never emit it at INFO."""
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug("response_trace stage=%s text=%r", stage, text or "")
+
+
 def _text(*code_points: int) -> str:
     return "".join(chr(code_point) for code_point in code_points)
 
@@ -210,6 +216,7 @@ class JarvisAgent:
             return await self._finish(conversation_id, message, AgentResponse(reply=_language_safe_reply(message, "The AI service is currently unavailable.")))
 
         if not llm_response.tool_calls:
+            _trace_response("post_character_input", llm_response.content)
             reply, hint = parse_presentation_response(llm_response.content)
             response = AgentResponse(reply=_language_safe_reply(message, reply or "I could not generate a response."), presentation_hint=hint)
             if self._memory_curator and self._memory and memory_command is None:
@@ -278,7 +285,8 @@ class JarvisAgent:
         ))
         messages.append(ChatMessage(role="tool", name=name, tool_call_id=llm_response.tool_calls[0].id, content=json.dumps(result.model_dump(), ensure_ascii=False)))
         try:
-            final = await self._provider_chat(messages, [], "none")
+            final = await self._provider_chat(messages, [], "none", phase="tool_final")
+            _trace_response("post_character_input", final.content)
             reply, hint = parse_presentation_response(final.content)
             reply = reply or ("The requested information could not be retrieved." if not result.success else "Tool result received.")
         except LLMRateLimitError as exc:
@@ -313,6 +321,7 @@ class JarvisAgent:
         if "tool_choice" in inspect.signature(self._llm_provider.chat).parameters:
             kwargs["tool_choice"] = tool_choice if tools else "none"
         response = await self._llm_provider.chat(messages, **kwargs)
+        _trace_response(f"{phase}_llm_raw", response.content)
         try:
             sample = self._calibration.record(
                 messages,
@@ -390,6 +399,7 @@ class JarvisAgent:
         )
 
     async def _finish(self, conversation_id: str, user_message: str, response: AgentResponse) -> AgentResponse:
+        _trace_response("final_user_response", response.reply)
         self._character_brain.observe(conversation_id, user_message, response)
         if self._conversations:
             await self._conversations.append(conversation_id, ConversationMessage.create("user", user_message))

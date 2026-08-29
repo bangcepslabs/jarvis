@@ -79,6 +79,8 @@ class ToolRouter:
                 logger.warning("router_provider_unsupported")
                 return ToolRouteDecision()
             response = await self._provider.chat(messages, **kwargs)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("response_trace stage=router_llm_raw text=%r", response.content or "")
             try:
                 sample = self._calibration.record(
                     messages,
@@ -117,6 +119,8 @@ class ToolRouter:
             )
             data = json.loads(response.content or "{}")
             decision = ToolRouteDecision.model_validate(data)
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug("response_trace stage=router_decision text=%r", decision.tool_name or "NONE")
             if decision.tool_name == "NONE":
                 return ToolRouteDecision()
             if decision.tool_name is not None and self._registry.get(decision.tool_name) is None:

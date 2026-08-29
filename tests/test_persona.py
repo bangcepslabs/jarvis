@@ -47,6 +47,12 @@ def test_persona_keeps_capability_limits_brief_and_non_customer_service_like():
     assert "necessary refusal" in rules
 
 
+def test_localized_deterministic_fallback_avoids_customer_service_closing():
+    reply = _language_safe_reply("\uc11c\ubc84 \uc2dc\uac04 \uba87\uc2dc\uc57c", "Tool result received.")
+    assert "\ub9d0\uc500\ud574\uc8fc\uc138\uc694" not in reply
+    assert "\ub3c4\uc640\ub4dc\ub9b4\uae4c\uc694" not in reply
+
+
 def test_profile_handles_harmless_adult_appearance_chat_naturally():
     from app.character.profile import DEFAULT_CHARACTER_PROFILE
 

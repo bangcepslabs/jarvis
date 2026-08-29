@@ -92,6 +92,12 @@ class Settings(BaseSettings):
     gpt_sovits_base_url: str = "http://127.0.0.1:9880"
     gpt_sovits_timeout_seconds: float = Field(30.0, gt=0)
     gpt_sovits_fallback_to_supertonic: bool = False
+    gpt_sovits_text_lang: str = "ko"
+    gpt_sovits_prompt_lang: str = "ja"
+    gpt_sovits_ref_audio_path: str = ""
+    gpt_sovits_prompt_text: str = ""
+    gpt_sovits_speed_factor: float = Field(1.0, gt=0)
+    gpt_sovits_text_split_method: str = "cut5"
     voice_latency_metrics: bool = Field(False, validation_alias=AliasChoices("VOICE_LATENCY_METRICS", "JARVIS_VOICE_LATENCY_METRICS"))
     auth_enabled: bool = Field(False, validation_alias=AliasChoices("JARVIS_AUTH_ENABLED", "AUTH_ENABLED"))
     client_token: str | None = Field(None, validation_alias=AliasChoices("JARVIS_CLIENT_TOKEN", "CLIENT_TOKEN"))

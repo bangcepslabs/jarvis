@@ -63,6 +63,12 @@ TTS_PROVIDER=gpt_sovits
 GPT_SOVITS_BASE_URL=http://127.0.0.1:9880
 GPT_SOVITS_TIMEOUT_SECONDS=30
 GPT_SOVITS_FALLBACK_TO_SUPERTONIC=true
+GPT_SOVITS_TEXT_LANG=ko
+GPT_SOVITS_PROMPT_LANG=ja
+GPT_SOVITS_REF_AUDIO_PATH=/home/bang/apps/voice-models/bocchi/ref/nijika.wav
+GPT_SOVITS_PROMPT_TEXT=<reference-audio-transcript>
+GPT_SOVITS_SPEED_FACTOR=1.0
+GPT_SOVITS_TEXT_SPLIT_METHOD=cut5
 ```
 
 For automatic startup, copy `deploy/jarvis-core.service.example` to

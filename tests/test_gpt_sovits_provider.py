@@ -47,11 +47,29 @@ class FakeClient:
 async def test_gpt_sovits_provider_posts_text_and_parses_wav():
     request = httpx.Request("POST", "http://gpt-sovits/tts")
     client = FakeClient(response=httpx.Response(200, content=wav_bytes(), request=request))
-    provider = GPTSoVITSTTSProvider("http://gpt-sovits", client_factory=lambda **kwargs: client)
+    provider = GPTSoVITSTTSProvider(
+        "http://gpt-sovits",
+        ref_audio_path="/voices/ref.wav",
+        prompt_text="reference",
+        client_factory=lambda **kwargs: client,
+    )
 
     result = await provider.synthesize("hello")
 
-    assert client.calls == [("http://gpt-sovits/tts", {"text": "hello"})]
+    assert client.calls == [(
+        "http://gpt-sovits/tts",
+        {
+            "text": "hello",
+            "text_lang": "ko",
+            "ref_audio_path": "/voices/ref.wav",
+            "prompt_lang": "ja",
+            "prompt_text": "reference",
+            "media_type": "wav",
+            "streaming_mode": False,
+            "speed_factor": 1.0,
+            "text_split_method": "cut5",
+        },
+    )]
     assert result.provider == "gpt_sovits_http"
     assert result.sample_rate == 16000
 
@@ -65,7 +83,7 @@ async def test_gpt_sovits_provider_posts_text_and_parses_wav():
     ],
 )
 async def test_gpt_sovits_provider_maps_network_and_server_failures(client):
-    provider = GPTSoVITSTTSProvider("http://gpt-sovits", client_factory=lambda **kwargs: client)
+    provider = GPTSoVITSTTSProvider("http://gpt-sovits", ref_audio_path="/voices/ref.wav", client_factory=lambda **kwargs: client)
     with pytest.raises(TTSProviderError):
         await provider.synthesize("hello")
 
@@ -86,12 +104,13 @@ async def test_fallback_provider_uses_supertonic_after_primary_failure():
 
 def test_provider_factory_defaults_to_supertonic_and_selects_gpt_sovits():
     default = create_tts_provider(Settings(tts_model_dir="models"))
-    gpt_sovits = create_tts_provider(Settings(tts_provider="gpt_sovits"))
+    gpt_sovits = create_tts_provider(Settings(tts_provider="gpt_sovits", gpt_sovits_ref_audio_path="/voices/ref.wav"))
     fallback = create_tts_provider(
         Settings(
             tts_provider="gpt_sovits",
             tts_model_dir="models",
             gpt_sovits_fallback_to_supertonic=True,
+            gpt_sovits_ref_audio_path="/voices/ref.wav",
         )
     )
 

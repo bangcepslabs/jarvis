@@ -21,6 +21,12 @@ def create_tts_provider(settings: Settings) -> TTSProvider:
         primary = GPTSoVITSTTSProvider(
             settings.gpt_sovits_base_url,
             settings.gpt_sovits_timeout_seconds,
+            text_lang=settings.gpt_sovits_text_lang,
+            prompt_lang=settings.gpt_sovits_prompt_lang,
+            ref_audio_path=settings.gpt_sovits_ref_audio_path,
+            prompt_text=settings.gpt_sovits_prompt_text,
+            speed_factor=settings.gpt_sovits_speed_factor,
+            text_split_method=settings.gpt_sovits_text_split_method,
         )
         return FallbackTTSProvider(primary, supertonic()) if settings.gpt_sovits_fallback_to_supertonic else primary
     raise TTSEnabledError("The configured speech provider is unavailable.")

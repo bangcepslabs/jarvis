@@ -1,6 +1,7 @@
 ﻿import 'package:audioplayers/audioplayers.dart';
 import 'package:cross_file/cross_file.dart';
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
@@ -10,6 +11,7 @@ import '../domain/avatar_presentation_hint.dart';
 import '../domain/character_reaction_policy.dart';
 import '../lip_sync/lip_sync_analyzer.dart';
 import '../lip_sync/lip_sync_playback_controller.dart';
+import '../voice/voice_activity_detector.dart';
 
 class AvatarController extends ChangeNotifier {
   AvatarController(this.api) {
@@ -28,43 +30,24 @@ class AvatarController extends ChangeNotifier {
   final CharacterReactionPolicy reactionPolicy = const CharacterReactionPolicy();
   int _presentationGeneration = 0;
   bool _recording = false;
+  bool _stopInProgress = false;
+  StreamSubscription<Amplitude>? _amplitudeSubscription;
+  Stopwatch? _recordingElapsed;
+  VoiceActivityDetector? _voiceActivityDetector;
   bool get isRecording => _recording;
   ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
 
   Future<void> toggleRecording() async {
     if (_recording) {
-      try {
-        final turnTimer = Stopwatch()..start();
-        final path = await _recorder.stop();
-        _recording = false;
-        notifyListeners();
-        final recorderStopElapsed = turnTimer.elapsed;
-        if (path == null) return _fail('음성 녹음 파일이 생성되지 않았어요.');
-        final file = File(path);
-        if (!await file.exists()) return _fail('음성 녹음 파일을 찾을 수 없어요.');
-        try {
-          await _run(
-            await XFile(path).readAsBytes(),
-            turnTimer: turnTimer,
-            recorderStopElapsed: recorderStopElapsed,
-            recordingFinalizeElapsed: turnTimer.elapsed,
-          );
-        } finally {
-          try {
-            await file.delete();
-          } catch (_) {
-            // Temporary recording cleanup must not mask the conversation result.
-          }
-        }
-      } catch (error) {
-        _recording = false;
-        _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
-      }
+      await _stopRecording(submit: true);
       return;
     }
     if (!await _recorder.hasPermission()) return _fail('Microphone permission required');
     state = AvatarState.listening;
     _recording = true;
+    _stopInProgress = false;
+    _voiceActivityDetector = VoiceActivityDetector();
+    _recordingElapsed = Stopwatch()..start();
     errorMessage = null;
     notifyListeners();
     try {
@@ -73,9 +56,68 @@ class AvatarController extends ChangeNotifier {
         const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
         path: path,
       );
+      _amplitudeSubscription = _recorder
+          .onAmplitudeChanged(const Duration(milliseconds: 100))
+          .listen(_handleAmplitude, onError: (_) => _stopRecording(submit: false));
     } catch (error) {
       _recording = false;
+      _recordingElapsed?.stop();
+      _recordingElapsed = null;
       _fail('녹음에 실패했어요: ${error.toString().replaceFirst('Exception: ', '')}');
+    }
+  }
+
+  void _handleAmplitude(Amplitude amplitude) {
+    if (!_recording || _stopInProgress || _recordingElapsed == null || _voiceActivityDetector == null) return;
+    final decision = _voiceActivityDetector!.process(amplitude.current, _recordingElapsed!.elapsed);
+    if (decision.event == VoiceActivityEvent.speechStarted) {
+      // Keep the existing recording UI; the separate detector state is not AvatarState.
+      notifyListeners();
+    } else if (decision.event == VoiceActivityEvent.speechEnded || decision.event == VoiceActivityEvent.maximumDurationReached) {
+      unawaited(_stopRecording(submit: decision.speechDetected));
+    }
+  }
+
+  Future<void> _stopRecording({required bool submit}) async {
+    if (!_recording || _stopInProgress) return;
+    _stopInProgress = true;
+    await _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
+    _recordingElapsed?.stop();
+    _recordingElapsed = null;
+    try {
+      final turnTimer = Stopwatch()..start();
+      final path = await _recorder.stop();
+      _recording = false;
+      _stopInProgress = false;
+      notifyListeners();
+      if (!submit) {
+        state = AvatarState.idle;
+        notifyListeners();
+        return;
+      }
+      final recorderStopElapsed = turnTimer.elapsed;
+      if (path == null) return _fail('음성 녹음 파일이 생성되지 않았어요.');
+      final file = File(path);
+      if (!await file.exists()) return _fail('음성 녹음 파일을 찾을 수 없어요.');
+      try {
+        await _run(
+          await XFile(path).readAsBytes(),
+          turnTimer: turnTimer,
+          recorderStopElapsed: recorderStopElapsed,
+          recordingFinalizeElapsed: turnTimer.elapsed,
+        );
+      } finally {
+        try {
+          await file.delete();
+        } catch (_) {
+          // Temporary recording cleanup must not mask the conversation result.
+        }
+      }
+    } catch (error) {
+      _recording = false;
+      _stopInProgress = false;
+      _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
     }
   }
 
@@ -207,6 +249,9 @@ class AvatarController extends ChangeNotifier {
     state = AvatarState.error;
     errorMessage = message;
     _recording = false;
+    _stopInProgress = false;
+    _amplitudeSubscription?.cancel();
+    _amplitudeSubscription = null;
     notifyListeners();
   }
 
@@ -215,6 +260,7 @@ class AvatarController extends ChangeNotifier {
     _presentationGeneration++;
     _lipSync.dispose();
     _recorder.dispose();
+    _amplitudeSubscription?.cancel();
     _player.dispose();
     api.dispose();
     super.dispose();

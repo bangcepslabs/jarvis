@@ -11,6 +11,21 @@ def test_persona_prompt_has_behavior_and_safety_sections():
     assert "answer in" in SYSTEM_PROMPT and "Korean" in SYSTEM_PROMPT
 
 
+def test_persona_allows_harmless_banter_without_safety_lecture():
+    assert "Harmless profanity" in SYSTEM_PROMPT
+    assert "require a lecture" in SYSTEM_PROMPT
+    assert "adult jokes" in SYSTEM_PROMPT
+    assert "Only introduce a boundary" in SYSTEM_PROMPT
+
+
+def test_profile_keeps_banter_natural_and_does_not_store_one_off_adult_remarks():
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    profile_rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
+    assert "Do not lecture" in profile_rules
+    assert "adult banter" in profile_rules
+
+
 def test_korean_user_gets_korean_fixed_fallback():
     assert _language_safe_reply("이해하지 못했어", "I could not generate a response.") == "응답을 만들지 못했어요. 다시 말씀해 주세요."
     assert _language_safe_reply("please repeat", "I could not generate a response.") == "I could not generate a response."

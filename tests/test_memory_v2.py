@@ -54,3 +54,11 @@ def test_curator_does_not_combine_facts_into_new_preferences():
     prompt = MemoryCurator._prompt("오늘 피곤해", "음식 얘기", [], [])
     assert "never combine separate facts" in prompt
     assert "explicitly stated" in prompt
+
+
+def test_curator_skips_one_off_adult_banter():
+    from app.memory.curator import MemoryCurator
+
+    prompt = MemoryCurator._prompt("그냥 장난으로 한 성적 농담", "ㅋㅋ", [], [])
+    assert "one-off adult or sexual remarks" in prompt
+    assert "intimate or sexual details" in prompt

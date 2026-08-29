@@ -67,6 +67,8 @@ async def test_native_tool_call_executes_and_feeds_result_back(caplog) -> None:
     assert '"success": true' in provider.requests[1][-1].content
     assert '"value": 3' in provider.requests[1][-1].content
     assert "stage=main_llm_raw" in caplog.text
+    assert "stage=main_llm_messages" in caplog.text
+    assert "stage=main_llm_system_prompt" in caplog.text
     assert "stage=tool_final_llm_raw" in caplog.text
     assert "stage=final_user_response" in caplog.text
 

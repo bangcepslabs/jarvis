@@ -35,6 +35,16 @@ def _trace_response(stage: str, text: str | None) -> None:
         logger.debug("response_trace stage=%s text=%r", stage, text or "")
 
 
+def _trace_messages(stage: str, messages: list[ChatMessage]) -> None:
+    """Trace prompt messages only when DEBUG is explicitly enabled."""
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "response_trace stage=%s messages=%r",
+            stage,
+            [{"role": item.role, "content": item.content} for item in messages],
+        )
+
+
 def _text(*code_points: int) -> str:
     return "".join(chr(code_point) for code_point in code_points)
 
@@ -320,6 +330,9 @@ class JarvisAgent:
         kwargs = {"tools": tools}
         if "tool_choice" in inspect.signature(self._llm_provider.chat).parameters:
             kwargs["tool_choice"] = tool_choice if tools else "none"
+        _trace_messages(f"{phase}_llm_messages", messages)
+        if messages and messages[0].role == "system":
+            _trace_response(f"{phase}_llm_system_prompt", messages[0].content)
         response = await self._llm_provider.chat(messages, **kwargs)
         _trace_response(f"{phase}_llm_raw", response.content)
         try:

@@ -12,6 +12,7 @@ venv/
 !.env.example
 data/*.db
 tmp/
+data/stt_samples/
 data/models/tts/
 
 clients/avatar_client/assets/avatars/development/*

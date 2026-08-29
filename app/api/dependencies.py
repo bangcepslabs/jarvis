@@ -29,6 +29,7 @@ from app.search.tools import NewsSearchTool, WebSearchTool
 from app.stt.exceptions import STTDisabledError
 from app.stt.faster_whisper_provider import FasterWhisperProvider
 from app.stt.service import STTService
+from app.stt.sample_capture import STTSampleCapture
 from app.tts.exceptions import TTSEnabledError
 from app.tts.service import TTSService
 from app.tts.profiles import VoiceProfiles
@@ -122,6 +123,15 @@ def get_stt_service() -> STTService:
         max_file_mb=settings.stt_max_file_mb,
         timeout_seconds=settings.stt_timeout_seconds,
         max_concurrent_requests=settings.stt_max_concurrent_requests,
+        sample_capture=STTSampleCapture(
+            enabled=settings.stt_sample_capture_enabled,
+            directory=settings.stt_sample_capture_dir,
+            max_files=settings.stt_sample_capture_max_files,
+            language=settings.stt_language,
+            model=settings.stt_model,
+            device=settings.stt_device,
+            compute_type=settings.stt_compute_type,
+        ),
     )
 
 

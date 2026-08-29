@@ -55,6 +55,10 @@ JARVIS_TTS_MODEL_DIR=data/models/tts/supertonic-3
 STT_PRELOAD=true
 TTS_PRELOAD=true
 VOICE_LATENCY_METRICS=true
+# Optional, privacy-sensitive local dataset capture; keep disabled by default.
+STT_SAMPLE_CAPTURE_ENABLED=false
+STT_SAMPLE_CAPTURE_DIR=data/stt_samples
+STT_SAMPLE_CAPTURE_MAX_FILES=200
 ```
 
 TTS defaults to the local Supertonic provider. To use a separately deployed
@@ -125,6 +129,13 @@ Docker Compose mounts these paths:
 
 Do not commit model binaries or audio. Back up the SQLite host directory and
 manage `.env` separately.
+
+STT sample capture is disabled by default. When explicitly enabled, the Core
+writes the submitted WAV and a local `manifest.jsonl` containing its transcript
+under `STT_SAMPLE_CAPTURE_DIR`; treat both as sensitive data. Capture stops
+with a warning at the configured file limit. Review and label samples with
+`python scripts/stt_dataset.py`, and remove the dataset directory manually
+when it is no longer needed (for example, `rm -rf data/stt_samples`).
 
 ## Authentication and LAN
 

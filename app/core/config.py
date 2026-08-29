@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     stt_timeout_seconds: float = 60.0
     stt_max_file_mb: int = 20
     stt_max_concurrent_requests: int = 1
+    stt_sample_capture_enabled: bool = False
+    stt_sample_capture_dir: str = "data/stt_samples"
+    stt_sample_capture_max_files: int = Field(200, ge=1)
     stt_model_cache_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_STT_MODEL_DIR", "STT_MODEL_DIR", "STT_MODEL_CACHE_DIR"))
     temp_dir: str | None = Field(None, validation_alias=AliasChoices("JARVIS_TEMP_DIR", "TEMP_DIR"))
     tts_enabled: bool = False

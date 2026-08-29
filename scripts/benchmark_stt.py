@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from app.stt.context import build_initial_prompt
+try:
+    from scripts.stt_dataset import read_manifest, labeled_dataset
+except ModuleNotFoundError:  # direct `python scripts/benchmark_stt.py` invocation
+    from stt_dataset import read_manifest, labeled_dataset
 
 
 def parse_bool(value: str) -> bool:
@@ -130,7 +134,8 @@ def benchmark_config(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Benchmark local faster-whisper CPU configurations.")
-    parser.add_argument("--file", nargs="+", required=True, type=Path, help="One or more PCM WAV files.")
+    parser.add_argument("--file", nargs="+", type=Path, help="One or more PCM WAV files.")
+    parser.add_argument("--dataset", type=Path, help="JSONL manifest containing labeled STT samples.")
     parser.add_argument("--models", nargs="+", default=["small", "base", "tiny"], choices=["small", "base", "tiny"])
     parser.add_argument("--vad", nargs="+", type=parse_bool, default=[True, False], metavar="BOOL")
     parser.add_argument("--cpu-threads", nargs="+", type=int, default=[2, 4, 6], metavar="N")
@@ -150,13 +155,28 @@ def main() -> int:
     args = build_parser().parse_args()
     if args.runs < 1 or any(thread <= 0 for thread in args.cpu_threads) or any(size < 1 for size in args.beam_size):
         raise SystemExit("--runs and --cpu-threads must be positive")
-    paths = [path.resolve() for path in args.file]
+    if bool(args.file) == bool(args.dataset):
+        raise SystemExit("provide exactly one of --file or --dataset")
+    expected_by_path: dict[Path, str] = {}
+    skipped = 0
+    if args.dataset:
+        manifest = args.dataset.resolve()
+        dataset = labeled_dataset(manifest, read_manifest(manifest))
+        all_records = read_manifest(manifest)
+        skipped = sum(1 for record in all_records if not record.get("expected_transcript"))
+        paths = [Path(item["file"]).resolve() for item in dataset]
+        expected_by_path = {Path(item["file"]).resolve(): item["expected"] for item in dataset}
+        if not paths:
+            raise SystemExit("dataset contains no labeled samples")
+    else:
+        paths = [path.resolve() for path in args.file]
     missing = [str(path) for path in paths if not path.is_file()]
     if missing:
         raise SystemExit(f"WAV file not found: {', '.join(missing)}")
     if args.expected and len(args.expected) not in {1, len(paths)}:
         raise SystemExit("--expected must contain one value or one value per --file")
-    expected_by_path = dict(zip(paths, args.expected if args.expected and len(args.expected) == len(paths) else [args.expected[0]] * len(paths))) if args.expected else {}
+    if args.expected:
+        expected_by_path = dict(zip(paths, args.expected if len(args.expected) == len(paths) else [args.expected[0]] * len(paths)))
     bias_prompt = build_initial_prompt(args.bias_terms) if args.bias_terms else None
     bias_variants = [None, bias_prompt] if args.compare_bias and bias_prompt else [bias_prompt]
 
@@ -200,6 +220,21 @@ def main() -> int:
         f"Fastest warm config: model={fastest['model']} vad={fastest['vad_filter']} "
         f"threads={fastest['cpu_threads']} inference={fastest['warm_inference_ms']}ms rtf={fastest['rtf']}"
     )
+    if skipped:
+        print(f"Skipped unlabeled dataset samples: {skipped}")
+    if any("cer" in result for result in results):
+        grouped: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+        for result in results:
+            key = (result["model"], result["vad_filter"], result["cpu_threads"], result["beam_size"], result["bias_prompt"])
+            grouped.setdefault(key, []).append(result)
+        print("Configuration summary:")
+        for key, items in grouped.items():
+            cers = sorted(item["cer"] for item in items)
+            times = sorted(item["warm_inference_ms"] for item in items)
+            rtfs = [item["rtf"] for item in items if item["rtf"] is not None]
+            exact = sum(item["cer"] == 0 for item in items)
+            percentile = lambda values, p: values[min(len(values) - 1, round((len(values) - 1) * p))]
+            print(f"{key}: avgCER={sum(cers)/len(cers):.3f} medianCER={percentile(cers, .5):.3f} exact={exact}/{len(items)} avgMs={sum(times)/len(times):.0f} p50Ms={percentile(times, .5)} p95Ms={percentile(times, .95)} avgRTF={sum(rtfs)/len(rtfs):.3f}")
     if args.json_output:
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
         args.json_output.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -1,4 +1,4 @@
-from scripts.benchmark_stt import build_model_kwargs, character_error_rate, default_compute_type, parse_bool
+from scripts.benchmark_stt import benchmark_cpu_thread_values, build_model_kwargs, character_error_rate, default_compute_type, parse_bool
 
 
 def test_benchmark_device_defaults_and_model_kwargs():
@@ -9,6 +9,8 @@ def test_benchmark_device_defaults_and_model_kwargs():
     cuda = build_model_kwargs("cuda", "float16", 6, None)
     assert cuda["device"] == "cuda" and cuda["compute_type"] == "float16"
     assert "cpu_threads" not in cuda
+    assert benchmark_cpu_thread_values("cpu", [2, 4, 6]) == [2, 4, 6]
+    assert benchmark_cpu_thread_values("cuda", [2, 4, 6]) == [0]
 
 
 def test_parse_bool_accepts_common_values():

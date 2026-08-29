@@ -92,6 +92,11 @@ def build_model_kwargs(device: str, compute_type: str, cpu_threads: int, cache_d
     return kwargs
 
 
+def benchmark_cpu_thread_values(device: str, cpu_threads: list[int]) -> list[int]:
+    """Return the CPU thread axis, or one neutral value for CUDA runs."""
+    return cpu_threads if device == "cpu" else [0]
+
+
 def benchmark_config(
     path: Path,
     model_name: str,
@@ -152,7 +157,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Benchmark local faster-whisper CPU or CUDA configurations.")
     parser.add_argument("--file", nargs="+", type=Path, help="One or more PCM WAV files.")
     parser.add_argument("--dataset", type=Path, help="JSONL manifest containing labeled STT samples.")
-    parser.add_argument("--models", nargs="+", default=["small", "base", "tiny"], choices=["small", "base", "tiny"])
+    parser.add_argument("--models", nargs="+", default=["small", "base", "tiny"], choices=["small", "base", "tiny", "medium"])
     parser.add_argument("--vad", nargs="+", type=parse_bool, default=[True, False], metavar="BOOL")
     parser.add_argument("--cpu-threads", nargs="+", type=int, default=[2, 4, 6], metavar="N")
     parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
@@ -171,7 +176,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    if args.runs < 1 or any(thread <= 0 for thread in args.cpu_threads) or any(size < 1 for size in args.beam_size):
+    if args.runs < 1 or (args.device == "cpu" and any(thread <= 0 for thread in args.cpu_threads)) or any(size < 1 for size in args.beam_size):
         raise SystemExit("--runs and --cpu-threads must be positive")
     if bool(args.file) == bool(args.dataset):
         raise SystemExit("provide exactly one of --file or --dataset")
@@ -200,10 +205,11 @@ def main() -> int:
     bias_variants = [None, bias_prompt] if args.compare_bias and bias_prompt else [bias_prompt]
 
     results: list[dict[str, Any]] = []
+    cpu_thread_values = benchmark_cpu_thread_values(args.device, args.cpu_threads)
     for path in paths:
         for model_name in args.models:
             for vad_filter in args.vad:
-                for cpu_threads in args.cpu_threads:
+                for cpu_threads in cpu_thread_values:
                     for beam_size in args.beam_size:
                         for variant in bias_variants:
                             try:

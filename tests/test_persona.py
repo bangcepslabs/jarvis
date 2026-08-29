@@ -24,6 +24,20 @@ def test_persona_does_not_add_unsolicited_ai_or_wording_meta_commentary():
     assert "Answer questions about your own body or nature factually only when directly asked" in SYSTEM_PROMPT
 
 
+def test_persona_does_not_turn_casual_complaints_into_coaching():
+    assert "Do not default to an empathy-then-advice-then-question template" in SYSTEM_PROMPT
+    assert "Avoid coaching phrases about mental health" in SYSTEM_PROMPT
+
+
+def test_profile_allows_advice_when_requested_but_not_by_default():
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
+    behavior = " ".join(DEFAULT_CHARACTER_PROFILE.behavior_rules)
+    assert "only when the user asks for advice" in rules
+    assert "Treat an everyday complaint as conversation" in behavior
+
+
 def test_profile_handles_harmless_adult_appearance_chat_naturally():
     from app.character.profile import DEFAULT_CHARACTER_PROFILE
 

@@ -79,6 +79,19 @@ def transcribe(model: Any, path: Path, vad_filter: bool, language: str, beam_siz
     }
 
 
+def default_compute_type(device: str) -> str:
+    return "int8" if device == "cpu" else "float16"
+
+
+def build_model_kwargs(device: str, compute_type: str, cpu_threads: int, cache_dir: str | None) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {"device": device, "compute_type": compute_type, "num_workers": 1}
+    if device == "cpu":
+        kwargs["cpu_threads"] = cpu_threads
+    if cache_dir:
+        kwargs["download_root"] = cache_dir
+    return kwargs
+
+
 def benchmark_config(
     path: Path,
     model_name: str,
@@ -89,19 +102,22 @@ def benchmark_config(
     language: str,
     beam_size: int,
     bias_prompt: str | None,
+    device: str = "cpu",
+    compute_type: str = "int8",
 ) -> dict[str, Any]:
     from faster_whisper import WhisperModel
 
     load_started = time.perf_counter()
-    kwargs: dict[str, Any] = {
-        "device": "cpu",
-        "compute_type": "int8",
-        "cpu_threads": cpu_threads,
-        "num_workers": 1,
-    }
-    if cache_dir:
-        kwargs["download_root"] = cache_dir
-    model = WhisperModel(model_name, **kwargs)
+    kwargs = build_model_kwargs(device, compute_type, cpu_threads, cache_dir)
+    try:
+        model = WhisperModel(model_name, **kwargs)
+    except Exception as exc:
+        if device == "cuda":
+            raise RuntimeError(
+                "CUDA benchmark unavailable: failed to initialize faster-whisper with device=cuda "
+                f"and compute_type={compute_type}. Check CUDA/ cuBLAS/cuDNN installation and GPU visibility."
+            ) from exc
+        raise RuntimeError(f"Failed to initialize faster-whisper CPU benchmark: {exc}") from exc
     load_ms = round((time.perf_counter() - load_started) * 1000)
 
     cold = transcribe(model, path, vad_filter, language, beam_size, bias_prompt)
@@ -111,8 +127,8 @@ def benchmark_config(
     result: dict[str, Any] = {
         "file": str(path),
         "model": model_name,
-        "device": "cpu",
-        "compute_type": "int8",
+        "device": device,
+        "compute_type": compute_type,
         "vad_filter": vad_filter,
         "cpu_threads": cpu_threads,
         "runs": runs,
@@ -133,12 +149,14 @@ def benchmark_config(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Benchmark local faster-whisper CPU configurations.")
+    parser = argparse.ArgumentParser(description="Benchmark local faster-whisper CPU or CUDA configurations.")
     parser.add_argument("--file", nargs="+", type=Path, help="One or more PCM WAV files.")
     parser.add_argument("--dataset", type=Path, help="JSONL manifest containing labeled STT samples.")
     parser.add_argument("--models", nargs="+", default=["small", "base", "tiny"], choices=["small", "base", "tiny"])
     parser.add_argument("--vad", nargs="+", type=parse_bool, default=[True, False], metavar="BOOL")
     parser.add_argument("--cpu-threads", nargs="+", type=int, default=[2, 4, 6], metavar="N")
+    parser.add_argument("--device", choices=["cpu", "cuda"], default="cpu")
+    parser.add_argument("--compute-type", help="faster-whisper compute type (default: int8 on CPU, float16 on CUDA).")
     parser.add_argument("--runs", type=int, default=3, help="Warm inference repetitions per configuration.")
     parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--language", default="ko")
@@ -157,6 +175,7 @@ def main() -> int:
         raise SystemExit("--runs and --cpu-threads must be positive")
     if bool(args.file) == bool(args.dataset):
         raise SystemExit("provide exactly one of --file or --dataset")
+    compute_type = args.compute_type or default_compute_type(args.device)
     expected_by_path: dict[Path, str] = {}
     skipped = 0
     if args.dataset:
@@ -187,17 +206,22 @@ def main() -> int:
                 for cpu_threads in args.cpu_threads:
                     for beam_size in args.beam_size:
                         for variant in bias_variants:
-                            result = benchmark_config(
-                                path,
-                                model_name,
-                                vad_filter,
-                                cpu_threads,
-                                args.runs,
-                                str(args.cache_dir) if args.cache_dir else None,
-                                args.language,
-                                beam_size,
-                                variant,
-                            )
+                            try:
+                                result = benchmark_config(
+                                    path,
+                                    model_name,
+                                    vad_filter,
+                                    cpu_threads,
+                                    args.runs,
+                                    str(args.cache_dir) if args.cache_dir else None,
+                                    args.language,
+                                    beam_size,
+                                    variant,
+                                    args.device,
+                                    compute_type,
+                                )
+                            except RuntimeError as exc:
+                                raise SystemExit(str(exc)) from exc
                             transcript = result.pop("_transcript")
                             if path in expected_by_path:
                                 result["cer"] = round(character_error_rate(transcript, expected_by_path[path]), 3)
@@ -217,7 +241,8 @@ def main() -> int:
         )
     fastest = min(results, key=lambda item: item["warm_inference_ms"])
     print(
-        f"Fastest warm config: model={fastest['model']} vad={fastest['vad_filter']} "
+        f"Fastest warm config: model={fastest['model']} device={fastest['device']} "
+        f"compute_type={fastest['compute_type']} vad={fastest['vad_filter']} "
         f"threads={fastest['cpu_threads']} inference={fastest['warm_inference_ms']}ms rtf={fastest['rtf']}"
     )
     if skipped:

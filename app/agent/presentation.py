@@ -4,6 +4,29 @@ import re
 from app.agent.models import PresentationHint
 
 _MARKER = re.compile(r"\s*<!--JARVIS_PRESENTATION\s+(\{.*?\})\s*-->\s*", re.DOTALL)
+_REFUSAL_MARKERS = (
+    "\uC5ED\uD560\uADF9",
+    "\uC131\uC801",
+    "\uD2B9\uC815 \uC18C\uB9AC",
+    "\uC74C\uC131 \uAE30\uB2A5",
+    "\uC74C\uC131 \uCF58\uD150\uCE20",
+)
+_REFUSAL_WORDS = (
+    "\uCC38\uC5EC\uD558\uC9C0 \uC54A",
+    "\uC9C0\uC6D0\uD558\uC9C0 \uC54A",
+    "\uD560 \uC218 \uC5C6",
+    "\uBABB \uD574",
+    "\uC548 \uB3FC",
+    "cannot",
+    "unable",
+)
+_SERVICE_CLOSINGS = (
+    "\uB2E4\uB978 \uB3C4\uC6C0",
+    "\uB9D0\uC500\uD574 \uC8FC",
+    "\uB9D0\uC500\uD574\uC8FC",
+    "\uB3C4\uC640\uB4DC\uB9B4\uAE4C",
+    "how else can i help",
+)
 
 
 def parse_presentation_response(content: str | None) -> tuple[str, PresentationHint]:
@@ -25,6 +48,28 @@ def parse_presentation_response(content: str | None) -> tuple[str, PresentationH
         except (TypeError, ValueError):
             return str(decoded.get("reply", text)), PresentationHint()
     return text, PresentationHint()
+
+
+def present_refusal_response(user_message: str, response: str) -> str:
+    """Keep an explicit refusal boundary while removing canned service tone.
+
+    This is presentation-only. It deliberately requires a refusal, a
+    capability/topic marker, and a service-style closing before changing text.
+    Tool authorization and safety decisions happen elsewhere.
+    """
+
+    normalized = " ".join((response or "").casefold().split())
+    if not normalized:
+        return response
+    if not any(marker.casefold() in normalized for marker in _REFUSAL_MARKERS):
+        return response
+    if not any(marker.casefold() in normalized for marker in _REFUSAL_WORDS):
+        return response
+    if not any(marker.casefold() in normalized for marker in _SERVICE_CLOSINGS):
+        return response
+    if re.search(r"[\uAC00-\uD7A3]", user_message):
+        return "거기부터는 너무 노골적이잖아 ㅋㅋ 그 정도까진 안 가."
+    return "I can't do that right now."
 
 
 def _clean(value: str) -> str:

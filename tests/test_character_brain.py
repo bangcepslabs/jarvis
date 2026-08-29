@@ -37,6 +37,16 @@ def test_default_profile_discourages_counselor_tone():
     assert "Do not combine separate facts" in context
 
 
+def test_character_context_keeps_adult_banter_non_explicit_and_in_character():
+    context = build_character_context(DEFAULT_CHARACTER_PROFILE)
+
+    assert "suggestive banter" in context
+    assert "playful implication" in context
+    assert "fade-to-black" in context
+    assert "policy explanation" in context
+    assert "customer-service closings" in context
+
+
 def test_character_context_contains_active_avatar_self_identity():
     context = build_character_context(DEFAULT_CHARACTER_PROFILE, avatar_identity=DEFAULT_AVATAR_IDENTITY, current_expression="happy", current_motion="idle2")
     assert "AVATAR SELF-IDENTITY" in context

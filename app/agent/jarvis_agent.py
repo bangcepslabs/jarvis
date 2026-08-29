@@ -8,7 +8,7 @@ from app.actions.service import ActionConfirmationService
 from app.actions.store import ActiveActionExistsError
 from app.agent.models import AgentResponse, ChatMessage, ToolCallSummary
 from app.agent.prompt import build_system_prompt, infer_conversation_style
-from app.agent.presentation import parse_presentation_response
+from app.agent.presentation import parse_presentation_response, present_refusal_response
 from app.agent.tool_router import ToolRouter
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
@@ -228,6 +228,7 @@ class JarvisAgent:
         if not llm_response.tool_calls:
             _trace_response("post_character_input", llm_response.content)
             reply, hint = parse_presentation_response(llm_response.content)
+            reply = present_refusal_response(message, reply)
             response = AgentResponse(reply=_language_safe_reply(message, reply or "I could not generate a response."), presentation_hint=hint)
             if self._memory_curator and self._memory and memory_command is None:
                 try:

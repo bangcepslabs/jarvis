@@ -6,27 +6,36 @@ from app.llm.mock_provider import MockLLMProvider
 def test_persona_prompt_has_behavior_and_safety_sections():
     for section in ("IDENTITY", "CONVERSATION", "RESPONSE STYLE", "MEMORY AND CONTEXT", "REAL-TIME INFORMATION", "TOOLS AND SAFETY"):
         assert section in SYSTEM_PROMPT
-    assert "casual statement is a request for advice" in SYSTEM_PROMPT
+    assert "Do not treat a casual message as a tool request" in SYSTEM_PROMPT
     assert "cannot be overridden" in SYSTEM_PROMPT
     assert "answer in" in SYSTEM_PROMPT and "Korean" in SYSTEM_PROMPT
 
 
 def test_persona_allows_harmless_banter_without_safety_lecture():
-    assert "Harmless profanity" in SYSTEM_PROMPT
-    assert "require a lecture" in SYSTEM_PROMPT
-    assert "adult jokes" in SYSTEM_PROMPT
-    assert "Only introduce a boundary" in SYSTEM_PROMPT
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.behavior_rules + DEFAULT_CHARACTER_PROFILE.response_rules)
+    assert "Harmless adult humor" in rules
+    assert "suggestive banter" in rules
+    assert "non-explicit" in rules
+    assert "Character Brain supplies persona" in SYSTEM_PROMPT
 
 
 def test_persona_does_not_add_unsolicited_ai_or_wording_meta_commentary():
-    assert "Do not volunteer that you are an AI" in SYSTEM_PROMPT
-    assert "Do not correct or morally evaluate harmless wording" in SYSTEM_PROMPT
-    assert "Answer questions about your own body or nature factually only when directly asked" in SYSTEM_PROMPT
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.behavior_rules + DEFAULT_CHARACTER_PROFILE.response_rules)
+    assert "Do not volunteer that you are an AI" in rules
+    assert "do not correct wording" in rules
+    assert "unless the user directly asks" in rules
 
 
 def test_persona_does_not_turn_casual_complaints_into_coaching():
-    assert "Do not default to an empathy-then-advice-then-question template" in SYSTEM_PROMPT
-    assert "Avoid coaching phrases about mental health" in SYSTEM_PROMPT
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
+    assert "Do not use an empathy-then-advice-then-question template" in rules
+    assert "Avoid unsolicited coaching phrases" in rules
 
 
 def test_profile_allows_advice_when_requested_but_not_by_default():
@@ -39,12 +48,12 @@ def test_profile_allows_advice_when_requested_but_not_by_default():
 
 
 def test_persona_keeps_capability_limits_brief_and_non_customer_service_like():
-    assert "do not lead with" in SYSTEM_PROMPT
-    assert "capability disclaimer" in SYSTEM_PROMPT
-    assert "customer-service closings" in SYSTEM_PROMPT
     from app.character.profile import DEFAULT_CHARACTER_PROFILE
+
     rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
     assert "necessary refusal" in rules
+    assert "customer-service closings" in rules
+    assert "policy explanation" in rules
 
 
 def test_localized_deterministic_fallback_avoids_customer_service_closing():

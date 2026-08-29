@@ -41,6 +41,15 @@ def _language_safe_reply(user_message: str, reply: str) -> str:
     """Keep fixed fallback replies in the language used by a Korean user."""
     if not re.search(r"[\uac00-\ud7a3]", user_message):
         return reply
+    casual_fixed = {
+        "The requested information could not be retrieved.": "\uc694\uccad\ud55c \uc815\ubcf4\ub97c \ubabb \uac00져왔\uc5b4.",
+        "Tool result received.": "\ub3c4\uad6c \uacb0\uacfc \ub098\uc654\uc5b4.",
+        "This action is no longer awaiting approval.": "\uc774 \uc791\uc5c5\uc740 \ub354 \uc774\uc0c1 \uc2b9\uc778 \ub300\uae30 \uc911\uc774 \uc544\ub2c8\uc57c.",
+        "The pending action has expired and was not executed.": "\uc2b9\uc778 \uc2dc\uac04\uc774 \uc9c0\ub098\uc11c \uc2e4\ud589\ud558\uc9c0 \uc54a\uc558\uc5b4.",
+        "The approved action could not be completed.": "\uc2b9\uc778\ub41c \uc791\uc5c5\uc744 \ub05d\ub0b4\uc9c0 \ubabb\ud588\uc5b4.",
+    }
+    if reply in casual_fixed:
+        return casual_fixed[reply]
     return {
         "The AI service is currently unavailable.": "현재 AI 서비스를 사용할 수 없어요.",
         "I could not generate a response.": "응답을 만들지 못했어요. 다시 말씀해 주세요.",
@@ -94,10 +103,10 @@ class JarvisAgent:
         if active is not None:
             if active.status == ActionStatus.EXPIRED:
                 if self._is_approval(message):
-                    return await self._finish(conversation_id, message, await self._approve(active))
+                    return await self._finish(conversation_id, message, await self._approve(active, message))
                 return await self._finish(conversation_id, message, AgentResponse(reply="There is no action awaiting confirmation."))
             if self._is_approval(message):
-                return await self._finish(conversation_id, message, await self._approve(active))
+                return await self._finish(conversation_id, message, await self._approve(active, message))
             if self._is_rejection(message):
                 await self._actions.reject_action(active.id)
                 return await self._finish(conversation_id, message, AgentResponse(reply="The restart request was cancelled."))
@@ -223,8 +232,13 @@ class JarvisAgent:
             except ActiveActionExistsError:
                 return AgentResponse(reply="A write action is already awaiting confirmation.")
             logger.info("action_created action_id=%s tool_name=%s safety=%s", action.id, action.tool_name, action.safety_level)
+            pending_reply = (
+                "이건 실제로 변경되는 작업이라 확인이 필요해. 실행할까?"
+                if re.search(r"[\uac00-\ud7a3]", message)
+                else f"Docker container '{validated_arguments.container}' will be restarted. This changes state. Continue?"
+            )
             return await self._finish(conversation_id, message, AgentResponse(
-                reply=f"Docker container '{validated_arguments.container}' will be restarted. This is a state-changing action. Continue?",
+                reply=pending_reply,
                 tool_calls=[ToolCallSummary(name=call.name, success=False)],
                 pending_action=self._summary(action),
             ))
@@ -232,25 +246,36 @@ class JarvisAgent:
         result = await self._tool_executor.execute(call.name, call.arguments)
         return await self._finalize_read_only(messages, llm_response, call.name, result, conversation_id, message)
 
-    async def _approve(self, action: PendingAction) -> AgentResponse:
+    async def _approve(self, action: PendingAction, user_message: str = "") -> AgentResponse:
         authorization = await self._actions.approve_action(action.id)
         if authorization is None:
             current = await self._actions.get_action(action.id)
             if current and current.status == ActionStatus.EXPIRED:
-                return AgentResponse(reply="The pending action has expired and was not executed.")
-            return AgentResponse(reply="This action is no longer awaiting approval.")
+                return AgentResponse(reply=_language_safe_reply(user_message, "The pending action has expired and was not executed."))
+            return AgentResponse(reply=_language_safe_reply(user_message, "This action is no longer awaiting approval."))
         logger.info("action_approved action_id=%s tool_name=%s", action.id, action.tool_name)
         result = await self._tool_executor.execute(action.tool_name, action.arguments, authorization)
         if result.success:
             await self._actions.mark_executed(action.id)
             logger.info("action_executed action_id=%s tool_name=%s", action.id, action.tool_name)
-            return AgentResponse(reply=f"Docker container '{action.arguments.get('container', '')}' was restarted.", tool_calls=[ToolCallSummary(name=action.tool_name, success=True)])
+            completed = f"Docker container '{action.arguments.get('container', '')}' was restarted."
+            return AgentResponse(reply=_language_safe_reply(user_message, completed), tool_calls=[ToolCallSummary(name=action.tool_name, success=True)])
         await self._actions.mark_failed(action.id, result.error or "Action failed.")
         logger.warning("action_failed action_id=%s tool_name=%s", action.id, action.tool_name)
-        return AgentResponse(reply=result.error or "The approved action could not be completed.", tool_calls=[ToolCallSummary(name=action.tool_name, success=False)])
+        return AgentResponse(reply=_language_safe_reply(user_message, result.error or "The approved action could not be completed."), tool_calls=[ToolCallSummary(name=action.tool_name, success=False)])
 
     async def _finalize_read_only(self, messages: list[ChatMessage], llm_response, name: str, result: ToolResult, conversation_id: str, user_message: str) -> AgentResponse:
         messages.append(ChatMessage(role="assistant", content=llm_response.content or "", tool_calls=llm_response.tool_calls))
+        messages.insert(1, ChatMessage(
+            role="system",
+            content=(
+                "TOOL RESULT PRESENTATION\n"
+                "Use the verified tool data to answer the user's question in the existing JARVIS character style. "
+                "Keep the user's language and casual/formal tone consistent with the character context, including after a tool call. "
+                "Preserve factual values exactly; do not invent health/status judgments or expose raw JSON. "
+                "For a short everyday question, answer briefly."
+            ),
+        ))
         messages.append(ChatMessage(role="tool", name=name, tool_call_id=llm_response.tool_calls[0].id, content=json.dumps(result.model_dump(), ensure_ascii=False)))
         try:
             final = await self._provider_chat(messages, [], "none")

@@ -57,8 +57,13 @@ async def test_native_tool_call_executes_and_feeds_result_back() -> None:
     response = await _agent(provider, RequiredTool()).respond("컴퓨터가 바빠?")
     assert response.reply == "Final answer from tool data."
     assert response.tool_calls[0].success is True
+    assert any(
+        message.role == "system" and "TOOL RESULT PRESENTATION" in message.content
+        for message in provider.requests[1]
+    )
     assert provider.requests[1][-1].role == "tool"
     assert '"success": true' in provider.requests[1][-1].content
+    assert '"value": 3' in provider.requests[1][-1].content
 
 
 @pytest.mark.asyncio

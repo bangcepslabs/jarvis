@@ -38,6 +38,15 @@ def test_profile_allows_advice_when_requested_but_not_by_default():
     assert "Treat an everyday complaint as conversation" in behavior
 
 
+def test_persona_keeps_capability_limits_brief_and_non_customer_service_like():
+    assert "do not lead with" in SYSTEM_PROMPT
+    assert "capability disclaimer" in SYSTEM_PROMPT
+    assert "customer-service closings" in SYSTEM_PROMPT
+    from app.character.profile import DEFAULT_CHARACTER_PROFILE
+    rules = " ".join(DEFAULT_CHARACTER_PROFILE.response_rules)
+    assert "necessary refusal" in rules
+
+
 def test_profile_handles_harmless_adult_appearance_chat_naturally():
     from app.character.profile import DEFAULT_CHARACTER_PROFILE
 

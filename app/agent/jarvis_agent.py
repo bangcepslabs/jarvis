@@ -23,6 +23,7 @@ from app.conversation.store import ConversationStore
 from app.conversation.context import ConversationContextManager, ContextSelectionResult, EstimatedTokenCounter
 from app.conversation.summary import ConversationSummarizer, ConversationSummaryStore, conversation_turn_key
 from app.llm.calibration import LLMCalibrationCollector
+from app.character.service import CharacterBrain
 
 logger = logging.getLogger(__name__)
 MAX_TOOL_CALLS_PER_REQUEST = 1
@@ -67,6 +68,7 @@ class JarvisAgent:
         summary_enabled: bool = False,
         summary_min_new_turns: int = 4,
         calibration: LLMCalibrationCollector | None = None,
+        character_brain: CharacterBrain | None = None,
     ) -> None:
         self._llm_provider = llm_provider
         self._tool_executor = tool_executor
@@ -85,6 +87,7 @@ class JarvisAgent:
         self._summary_enabled = summary_enabled and summarizer is not None
         self._summary_min_new_turns = max(1, summary_min_new_turns)
         self._calibration = calibration or LLMCalibrationCollector()
+        self._character_brain = character_brain or CharacterBrain()
 
     async def respond(self, message: str, conversation_id: str = "default", response_mode: str | None = None) -> AgentResponse:
         active = await self._actions.get_active_action()
@@ -118,7 +121,10 @@ class JarvisAgent:
         if self._memory:
             memories = await self._memory.search_memories(message)
         history = await self._context_messages(conversation_id, all_history=self._context_manager_explicit)
-        system_prompt = build_system_prompt(response_mode, infer_conversation_style(history))
+        system_prompt = build_system_prompt(response_mode, infer_conversation_style(history)) + "\n\n" + self._character_brain.context(
+            conversation_id,
+            tuple(tool.name for tool in self._tool_registry.list_tools()),
+        )
         summary_state = self._summary_store.get(conversation_id) if self._summary_enabled else None
         summary_update = None
         selection = self._context_manager.build(
@@ -359,6 +365,7 @@ class JarvisAgent:
         )
 
     async def _finish(self, conversation_id: str, user_message: str, response: AgentResponse) -> AgentResponse:
+        self._character_brain.observe(conversation_id, user_message, response)
         if self._conversations:
             await self._conversations.append(conversation_id, ConversationMessage.create("user", user_message))
             await self._conversations.append(conversation_id, ConversationMessage.create("assistant", response.reply))

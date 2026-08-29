@@ -9,6 +9,52 @@ from app.memory.models import MemoryEntry
 logger = logging.getLogger(__name__)
 
 
+# These are presentation artifacts, not durable conversational facts.  They
+# are intentionally narrow: a short refusal such as "그건 못 해" can still be
+# useful context, while the repeated capability disclaimer + help-desk closing
+# should not become an imitation example for the next response.
+_CAPABILITY_BOILERPLATE_MARKERS = (
+    "지원하지만",
+    "지원하지 않",
+    "음성 기능",
+    "특정 소리",
+    "할 수 없",
+    "cannot",
+    "unable to",
+)
+_CUSTOMER_SERVICE_CLOSING_MARKERS = (
+    "다른 도움이",
+    "말씀해주세요",
+    "도와드릴까요",
+    "도움이 필요하면",
+    "how else can i help",
+    "let me know if you need",
+)
+
+
+def is_assistant_presentation_boilerplate(message: ConversationMessage) -> bool:
+    """Return whether an assistant message is safe to omit from LLM history.
+
+    The stored conversation remains unchanged.  This only removes generic
+    capability/refusal wording when it is paired with a customer-service
+    closing, so factual or conversational assistant turns remain available.
+    """
+
+    if message.role != "assistant":
+        return False
+    text = " ".join(message.content.casefold().split())
+    return (
+        any(marker.casefold() in text for marker in _CAPABILITY_BOILERPLATE_MARKERS)
+        and any(marker.casefold() in text for marker in _CUSTOMER_SERVICE_CLOSING_MARKERS)
+    )
+
+
+def filter_history_for_prompt(history: list[ConversationMessage]) -> list[ConversationMessage]:
+    """Filter only imitation-prone assistant presentation from prompt history."""
+
+    return [item for item in history if not is_assistant_presentation_boilerplate(item)]
+
+
 class EstimatedTokenCounter:
     """Small replaceable token heuristic; it is not a billing-token counter."""
 
@@ -73,7 +119,10 @@ class ConversationContextManager:
         system = ChatMessage(role="system", content=system_prompt)
         current = ChatMessage(role="user", content=current_message)
         selected = [system]
-        history_groups = self._turns(history or [])
+        original_history = history or []
+        filtered_history = filter_history_for_prompt(original_history)
+        filtered_count = len(original_history) - len(filtered_history)
+        history_groups = self._turns(filtered_history)
         memory_messages = self._memory_messages(memories or [])
         fixed_tokens = self._counter.estimate_message(system) + self._counter.estimate_message(current)
         remaining = self.usable_budget - fixed_tokens
@@ -147,7 +196,7 @@ class ConversationContextManager:
         logger.info(
             "conversation_context_selected budget=%s estimated_context_tokens=%s "
             "history_turns_selected=%s history_turns_dropped=%s memory_selected=%s "
-            "memory_dropped=%s over_budget=%s",
+            "memory_dropped=%s over_budget=%s history_presentation_filtered=%s",
             result.budget,
             result.estimated_tokens,
             result.selected_history_turns,
@@ -155,6 +204,7 @@ class ConversationContextManager:
             result.included_memory_count,
             result.dropped_memory_count,
             result.over_budget,
+            filtered_count,
         )
         return result
 

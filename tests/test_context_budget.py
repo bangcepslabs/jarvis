@@ -1,5 +1,9 @@
 from app.agent.models import ChatMessage
-from app.conversation.context import ConversationContextManager, EstimatedTokenCounter
+from app.conversation.context import (
+    ConversationContextManager,
+    EstimatedTokenCounter,
+    filter_history_for_prompt,
+)
 from app.conversation.models import ConversationMessage
 from app.memory.models import MemoryCategory, MemoryEntry
 
@@ -111,3 +115,41 @@ def test_tool_result_can_be_dropped_as_part_of_an_old_turn():
     result = manager(30).build("system", "now", history)
     assert result.selected_messages[-1] == ChatMessage(role="user", content="now")
     assert result.dropped_turn_count == 1
+
+
+def test_empty_history_reproduces_a_new_conversation_without_old_refusal_style():
+    result = manager(500).build("persona", "가슴 ㅈㄴ큰데", history=[])
+
+    assert contents(result) == ["persona", "가슴 ㅈㄴ큰데"]
+
+
+def test_ab_history_variants_preserve_meaning_but_filter_imitation_prone_refusal():
+    refusal = "음성 기능은 있지만 그런 특정 소리는 낼 수 없어요. 다른 도움이 필요하면 말씀해주세요."
+    history_a: list[ConversationMessage] = []
+    history_b = [message("user", "오늘 뭐 하지?"), message("assistant", "그냥 쉬자 ㅋㅋ")]
+    history_c = [
+        message("user", "그런 소리 내봐"),
+        message("assistant", refusal),
+        message("user", "다시 해봐"),
+        message("assistant", refusal),
+    ]
+
+    assert filter_history_for_prompt(history_a) == []
+    assert [item.content for item in filter_history_for_prompt(history_b)] == [
+        "오늘 뭐 하지?",
+        "그냥 쉬자 ㅋㅋ",
+    ]
+    filtered_c = filter_history_for_prompt(history_c)
+    assert [item.content for item in filtered_c] == ["그런 소리 내봐", "다시 해봐"]
+
+    # User meaning is retained while the repeated assistant wording is not
+    # available as a style imitation example.
+    selected_c = contents(manager(500).build("persona", "뭐 보고 그런 소리야", history_c))
+    assert "그런 소리 내봐" in selected_c
+    assert refusal not in selected_c
+
+
+def test_short_refusal_without_customer_service_boilerplate_remains_context():
+    history = [message("user", "그거 해줘"), message("assistant", "그건 지금은 못 해.")]
+
+    assert filter_history_for_prompt(history) == history

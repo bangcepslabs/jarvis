@@ -82,7 +82,14 @@ class MemoryService:
             logger.info("memory_skipped reason=duplicate memory_id=%s category=%s", similar.id, similar.category)
             return None
         target_key = similar.key if similar else key
-        result = await self.save_memory(decision.category, target_key, value, MemorySource.ADAPTIVE, decision.importance, decision.confidence)
+        result = await self.save_memory(
+            decision.category,
+            target_key,
+            value,
+            MemorySource.ADAPTIVE,
+            decision.importance if decision.importance is not None else 0.5,
+            decision.confidence if decision.confidence is not None else 1.0,
+        )
         logger.info("memory_%s memory_id=%s category=%s", "updated" if similar else "saved", result.id if result else None, decision.category)
         return result
 

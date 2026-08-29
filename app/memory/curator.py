@@ -12,6 +12,32 @@ from app.memory.service import MemoryService
 logger = logging.getLogger(__name__)
 
 
+def memory_decision_response_schema() -> dict[str, object]:
+    """Return a Groq/OpenAI strict-compatible schema for curator output."""
+    properties = {
+        "action": {"type": "string", "enum": ["SAVE", "UPDATE", "IGNORE"]},
+        "category": {"type": ["string", "null"], "enum": [*(c.value for c in MemoryCategory), None]},
+        "key": {"type": ["string", "null"]},
+        "value": {"type": ["string", "null"]},
+        "reason": {"type": ["string", "null"]},
+        "importance": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    }
+    return {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "memory_decision",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties),
+                "additionalProperties": False,
+            },
+        },
+    }
+
+
 class MemoryCurator:
     """Best-effort classifier for durable, non-sensitive adaptive memory."""
 
@@ -31,27 +57,7 @@ class MemoryCurator:
         relevant_memories: list[object] | None = None,
     ) -> MemoryDecision | None:
         prompt = self._prompt(user_message, assistant_response, recent_messages or [], relevant_memories or [])
-        schema = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "memory_decision",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "action": {"type": "string", "enum": ["SAVE", "UPDATE", "IGNORE"]},
-                        "category": {"type": ["string", "null"], "enum": [*(c.value for c in MemoryCategory), None]},
-                        "key": {"type": ["string", "null"]},
-                        "value": {"type": ["string", "null"]},
-                        "reason": {"type": ["string", "null"]},
-                        "importance": {"type": "number", "minimum": 0, "maximum": 1},
-                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    },
-                    "required": ["action", "category", "key", "value", "reason"],
-                    "additionalProperties": False,
-                },
-            },
-        }
+        schema = memory_decision_response_schema()
         try:
             response = await asyncio.wait_for(self._provider.chat(
                 [ChatMessage(role="system", content=prompt)],

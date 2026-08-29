@@ -49,5 +49,5 @@ class MemoryDecision(BaseModel):
     key: str | None = None
     value: str | None = None
     reason: str | None = None
-    importance: float = Field(default=0.5, ge=0.0, le=1.0)
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    importance: float | None = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float | None = Field(default=1.0, ge=0.0, le=1.0)

@@ -33,6 +33,8 @@ def test_default_profile_discourages_counselor_tone():
     assert "counselor or customer-service tone" in context
     assert "Do not lead with obligatory sympathy" in context
     assert "do not turn an ordinary chat into life coaching" in context
+    assert "do not summarize, analyze, or list the user's memories as a profile" in context
+    assert "Do not combine separate facts" in context
 
 
 def test_character_brain_tracks_state_per_conversation():

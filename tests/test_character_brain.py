@@ -3,7 +3,7 @@ import pytest
 from app.agent.jarvis_agent import JarvisAgent
 from app.agent.models import ChatMessage
 from app.character.context import build_character_context
-from app.character.profile import CharacterProfile
+from app.character.profile import CharacterProfile, DEFAULT_CHARACTER_PROFILE
 from app.character.service import CharacterBrain
 from app.llm.base import LLMProvider
 from app.llm.models import LLMResponse
@@ -26,6 +26,13 @@ def test_character_context_renders_profile_and_continuity_without_authority():
     assert "Name: Test" in context
     assert "weather" in context
     assert "never authorization" in context
+
+
+def test_default_profile_discourages_counselor_tone():
+    context = build_character_context(DEFAULT_CHARACTER_PROFILE)
+    assert "counselor or customer-service tone" in context
+    assert "Do not lead with obligatory sympathy" in context
+    assert "do not turn an ordinary chat into life coaching" in context
 
 
 def test_character_brain_tracks_state_per_conversation():

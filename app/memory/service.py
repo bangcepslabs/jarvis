@@ -56,12 +56,12 @@ class MemoryService:
             return MemoryCommand(MemoryCommandType.SEARCH)
         return None
 
-    async def save_memory(self, category: MemoryCategory, key: str, content: str, source: MemorySource = MemorySource.EXPLICIT) -> MemoryEntry | None:
+    async def save_memory(self, category: MemoryCategory, key: str, content: str, source: MemorySource = MemorySource.EXPLICIT, importance: float = 0.5, confidence: float = 1.0) -> MemoryEntry | None:
         if self._is_secret(key, content):
             logger.warning("memory_rejected_secret key=%s", key)
             return None
         now = datetime.now(UTC)
-        entry = MemoryEntry(category=category, key=key, content=content[:4000], created_at=now, updated_at=now, source=source)
+        entry = MemoryEntry(category=category, key=key, content=content[:4000], created_at=now, updated_at=now, source=source, importance=importance, confidence=confidence)
         result = await self._store.save(entry)
         logger.info("memory_saved memory_id=%s category=%s key=%s", result.id, result.category, result.key)
         return result
@@ -74,15 +74,17 @@ class MemoryService:
             return None
         existing = await self._store.list(1000)
         normalized = self._normalize(value)
-        for item in existing:
-            if self._normalize(item.content) == normalized:
-                return None
         same_key = next((item for item in existing if item.key.casefold() == key.casefold()), None)
-        if decision.action == MemoryAction.UPDATE and same_key is None:
+        similar = same_key or next((item for item in existing if item.category == decision.category and self._similarity(item.content, value) >= 0.5), None)
+        if decision.action == MemoryAction.UPDATE and similar is None:
             return None
-        if same_key and self._normalize(same_key.content) == normalized:
+        if similar and self._normalize(similar.content) == normalized:
+            logger.info("memory_skipped reason=duplicate memory_id=%s category=%s", similar.id, similar.category)
             return None
-        return await self.save_memory(decision.category, key, value, MemorySource.ADAPTIVE)
+        target_key = similar.key if similar else key
+        result = await self.save_memory(decision.category, target_key, value, MemorySource.ADAPTIVE, decision.importance, decision.confidence)
+        logger.info("memory_%s memory_id=%s category=%s", "updated" if similar else "saved", result.id if result else None, decision.category)
+        return result
 
     @staticmethod
     def _normalize(value: str) -> str:
@@ -96,7 +98,17 @@ class MemoryService:
         if any(word in normalized for word in PREFERENCE_WORDS):
             search_query += " response_preference"
         results = await self._store.search(search_query, min(limit or self._max_context_items, self._max_context_items))
-        logger.info("memory_retrieved count=%s", len(results))
+        mark_used = getattr(self._store, "mark_used", None)
+        if mark_used:
+            used_ids = [item.id for item in results if item.id is not None]
+            await mark_used(used_ids)
+            used_at = datetime.now(UTC)
+            results = [
+                item.model_copy(update={"last_used_at": used_at, "use_count": item.use_count + 1})
+                if item.id in used_ids else item
+                for item in results
+            ]
+        logger.info("memory_retrieved count=%s ids=%s categories=%s", len(results), [item.id for item in results], [item.category.value for item in results])
         return results
 
     async def delete_memory(self, key: str | None, query: str = "") -> int:
@@ -119,6 +131,13 @@ class MemoryService:
             lines.append(line)
             total += len(line) + 1
         return "\n".join(lines) if len(lines) > 1 else ""
+
+    @classmethod
+    def _similarity(cls, left: str, right: str) -> float:
+        left_tokens, right_tokens = set(cls._normalize(left).split()), set(cls._normalize(right).split())
+        if not left_tokens or not right_tokens:
+            return 0.0
+        return len(left_tokens & right_tokens) / max(1, min(len(left_tokens), len(right_tokens)))
 
     @staticmethod
     def _infer_key_and_category(message: str) -> tuple[str, MemoryCategory]:

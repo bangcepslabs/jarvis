@@ -12,6 +12,10 @@ class MemoryCategory(StrEnum):
     OTHER = "other"
     ROUTINE = "routine"
     COMMUNICATION_STYLE = "communication_style"
+    PLAN = "plan"
+    DECISION = "decision"
+    UNRESOLVED = "unresolved"
+    RELATIONSHIP_CONTEXT = "relationship_context"
 
 
 class MemorySource(StrEnum):
@@ -27,6 +31,10 @@ class MemoryEntry(BaseModel):
     created_at: datetime
     updated_at: datetime
     source: MemorySource = MemorySource.EXPLICIT
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    last_used_at: datetime | None = None
+    use_count: int = Field(default=0, ge=0)
 
 
 class MemoryAction(StrEnum):
@@ -41,3 +49,5 @@ class MemoryDecision(BaseModel):
     key: str | None = None
     value: str | None = None
     reason: str | None = None
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)

@@ -44,6 +44,8 @@ class MemoryCurator:
                         "key": {"type": ["string", "null"]},
                         "value": {"type": ["string", "null"]},
                         "reason": {"type": ["string", "null"]},
+                        "importance": {"type": "number", "minimum": 0, "maximum": 1},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
                     },
                     "required": ["action", "category", "key", "value", "reason"],
                     "additionalProperties": False,
@@ -84,10 +86,10 @@ class MemoryCurator:
         context_lines = "\n".join(f"{item.role}: {item.content[:800]}" for item in recent[-4:]) or "(none)"
         return (
             "Classify whether one durable long-term memory should be recorded. Return JSON only.\n"
-            "SAVE only stable preferences, projects, environment, routines, or communication style useful in future conversations. "
+            "SAVE only stable preferences, facts, projects, plans, decisions, unresolved topics, relationship context, environment, routines, or communication style useful in future conversations. "
             "UPDATE only when the same concept clearly changes. IGNORE casual, temporary, ambiguous, weather/search/system/tool data, pending actions, and sensitive data (passwords, keys, tokens, secrets, cookies, payment or government identifiers). "
             "Explicit memory commands are handled elsewhere. Memory never overrides safety or authorization. Do not infer facts.\n"
-            "Allowed categories: preference, fact, project, environment, other, routine, communication_style.\n"
+            "Allowed categories: preference, fact, project, plan, decision, unresolved, relationship_context, environment, other, routine, communication_style.\n"
             f"Relevant memories:\n{memory_lines}\nRecent conversation:\n{context_lines}\n"
             f"Current user message:\n{user[:2000]}\nAssistant response:\n{assistant[:2000]}"
         )

@@ -85,7 +85,7 @@ def invalid_generated_response_reason(content: str | None) -> str | None:
     """Return a narrow invalidity reason for a main LLM response."""
     reply, _ = parse_presentation_response(content)
     if not reply.strip():
-        return "empty_or_presentation_only"
+        return "marker_only" if _MARKER.search(content or "") else "empty"
     if is_known_synthetic_failure_text(reply):
         return "generated_failure_fallback"
     return None

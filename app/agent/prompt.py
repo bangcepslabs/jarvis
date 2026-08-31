@@ -98,10 +98,11 @@ def build_system_prompt(response_mode: str | None = None, style: ConversationSty
         "code symbols, and long preambles. Expand only if the user asks for more detail."
     )
     presentation_instruction = (
-        "After the natural reply, append one machine-readable marker in this exact form: "
-        "<!--JARVIS_PRESENTATION {\"emotion\":\"neutral\",\"intensity\":0.3,\"motion_intent\":\"none\",\"attitude\":\"neutral\",\"reaction\":\"none\",\"duration\":\"normal\"}-->. "
-        "Use only semantic values; never use model-specific expression or motion filenames. "
-        "If uncertain, use neutral, low intensity, and none."
+        "You MUST first return a non-empty, natural-language reply for the user. "
+        "Character Brain generates ordinary presentation metadata separately, so do not emit "
+        "JARVIS_PRESENTATION metadata for ordinary replies. The legacy marker format is optional "
+        "metadata only and must never replace the visible reply. If presentation metadata is "
+        "uncertain, omit it and still answer normally. Never return only a marker."
     )
     return SYSTEM_PROMPT + "\n\nPRESENTATION HINT\n" + presentation_instruction + "\n\nADAPTIVE CONVERSATION STYLE\n" + style_instructions[style.name] + "\n" + (
         "Explicit requests for detail, brevity, or a specific format override this adaptive hint. "

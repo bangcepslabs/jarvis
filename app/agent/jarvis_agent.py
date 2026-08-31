@@ -2,6 +2,7 @@ import json
 import logging
 import inspect
 import re
+import time
 
 from app.actions.models import ActionStatus, PendingAction, PendingActionSummary
 from app.actions.service import ActionConfirmationService
@@ -256,12 +257,13 @@ class JarvisAgent:
                     ChatMessage(
                         role="system",
                         content=(
-                            "The previous assistant response was invalid or contained only metadata. "
-                            "Answer the user's message now with a concise, natural user-facing reply. "
-                            "Include the presentation marker only after actual reply text."
+                            "RETRY OVERRIDE: Return ONLY a non-empty natural-language reply to the user's "
+                            "latest message. Do not emit JARVIS_PRESENTATION metadata, HTML comments, JSON, "
+                            "or any other metadata in this retry. The reply itself is required."
                         ),
                     ),
                 )
+                retry_started = time.perf_counter()
                 try:
                     retry = await self._provider_chat(
                         retry_messages,
@@ -272,11 +274,18 @@ class JarvisAgent:
                         memory_count=selection.included_memory_count,
                         phase="main_retry",
                     )
+                    self._trace_retry_response(retry, (time.perf_counter() - retry_started) * 1000)
                     reply, hint = parse_presentation_response(retry.content)
                     invalid_reason = invalid_generated_response_reason(retry.content)
                     response_origin = "llm_retry"
-                except (LLMRateLimitError, LLMProviderError):
-                    logger.exception("main_llm_retry_failed")
+                    if invalid_reason:
+                        logger.warning("[main_llm_retry_invalid] reason=%s", invalid_reason)
+                except LLMRateLimitError:
+                    logger.exception("[main_llm_retry_failed] reason=rate_limited")
+                    reply, hint = "", hint
+                    invalid_reason = "retry_rate_limited"
+                except LLMProviderError as exc:
+                    logger.exception("[main_llm_retry_failed] reason=%s", self._retry_failure_reason(exc))
                     reply, hint = "", hint
                     invalid_reason = "retry_provider_failure"
                 if invalid_reason:
@@ -399,6 +408,31 @@ class JarvisAgent:
         if retry_after:
             return f"The AI service is temporarily rate limited. Please try again after {retry_after}."
         return "The AI service is temporarily rate limited. Please try again shortly."
+
+    @staticmethod
+    def _retry_failure_reason(exc: Exception) -> str:
+        """Classify wrapped provider failures without exposing provider details."""
+        cause_name = type(exc.__cause__).__name__.casefold() if exc.__cause__ else ""
+        return "timeout" if "timeout" in cause_name else "provider_exception"
+
+    def _trace_retry_response(self, response, elapsed_ms: float) -> None:
+        """Keep retry diagnostics private to DEBUG while exposing response metadata."""
+        if not logger.isEnabledFor(logging.DEBUG):
+            return
+        usage = getattr(response, "usage", None)
+        provider_settings = getattr(self._llm_provider, "_settings", None)
+        logger.debug(
+            "[main_llm_retry_raw] text=%r finish_reason=%s completion_tokens=%s "
+            "reasoning_tokens=%s elapsed_ms=%s max_completion_tokens=%s "
+            "reasoning_effort=%s stop_sequences=none",
+            getattr(response, "content", None) or "",
+            getattr(response, "finish_reason", None),
+            getattr(usage, "completion_tokens", None),
+            getattr(usage, "reasoning_tokens", None),
+            round(elapsed_ms),
+            getattr(provider_settings, "llm_max_completion_tokens", "provider_default"),
+            getattr(provider_settings, "llm_reasoning_effort", "provider_default"),
+        )
 
     async def _provider_chat(
         self,

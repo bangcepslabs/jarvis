@@ -76,6 +76,11 @@ class OpenAICompatibleProvider(LLMProvider):
             message = body["choices"][0]["message"]
             calls = [self._parse_tool_call(item) for item in message.get("tool_calls", [])]
             usage = body.get("usage")
+            if isinstance(usage, dict):
+                usage = dict(usage)
+                details = usage.get("completion_tokens_details")
+                if isinstance(details, dict):
+                    usage["reasoning_tokens"] = details.get("reasoning_tokens")
             result = LLMResponse(content=message.get("content"), tool_calls=calls, finish_reason=body["choices"][0].get("finish_reason"), usage=LLMUsage(**usage) if isinstance(usage, dict) else None, rate_limit=rate_limit)
         except (KeyError, IndexError, TypeError) as exc:
             raise LLMProviderError("The AI service returned an invalid response.") from exc

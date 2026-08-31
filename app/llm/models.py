@@ -12,6 +12,7 @@ class LLMToolCall(BaseModel):
 class LLMUsage(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    reasoning_tokens: int | None = None
     total_tokens: int | None = None
 
 

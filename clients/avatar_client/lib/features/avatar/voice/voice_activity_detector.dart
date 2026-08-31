@@ -4,10 +4,10 @@ enum VoiceActivityEvent { none, speechStarted, speechEnded, maximumDurationReach
 
 class VoiceActivityConfig {
   const VoiceActivityConfig({
-    this.amplitudeThresholdDb = -45.0,
+    this.amplitudeThresholdDb = -35.0,
     this.minimumSpeechDuration = const Duration(milliseconds: 300),
     this.silenceTimeout = const Duration(milliseconds: 800),
-    this.maximumRecordingDuration = const Duration(seconds: 20),
+    this.maximumRecordingDuration = const Duration(seconds: 8),
   });
 
   final double amplitudeThresholdDb;

@@ -30,6 +30,7 @@ class WakeWordController extends ChangeNotifier {
 
   Future<void> suspend() async {
     if (state == WakeWordControllerState.disposed) return;
+    if (state == WakeWordControllerState.suspended) return;
     final generation = ++_generation;
     state = WakeWordControllerState.suspended;
     notifyListeners();

@@ -47,6 +47,28 @@ android {
             isShrinkResources = false
         }
     }
+
+    // openwakeword-android 0.1.5 loads its shared preprocessing models
+    // from the root of Android assets. Keep the deployment files organized
+    // under wake_word/development while packaging the two library-required
+    // aliases into the APK.
+    sourceSets {
+        named("main") {
+            assets.srcDir(file("$buildDir/generated/wake_word"))
+        }
+    }
+}
+
+val generateWakeWordAssets = tasks.register<Copy>("generateWakeWordAssets") {
+    from("src/main/assets/wake_word/development") {
+        include("melspectrogram.onnx", "embedding_model.onnx")
+        eachFile { path = name }
+    }
+    into(file("$buildDir/generated/wake_word"))
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(generateWakeWordAssets)
 }
 
 dependencies {

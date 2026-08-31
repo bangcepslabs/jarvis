@@ -10,7 +10,10 @@ import 'features/voice/wake_word/wake_word_controller.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final config = ClientConfig.fromEnvironment();
-  final avatarController = AvatarController(JarvisApiClient(config.coreBaseUrl, clientToken: config.clientToken));
+  final avatarController = AvatarController(
+    JarvisApiClient(config.coreBaseUrl, clientToken: config.clientToken),
+    wakeWordEnabled: config.wakeWordEnabled,
+  );
   final wakeController = WakeWordController(
     config.wakeWordEnabled && config.wakeWordEngine == 'openwakeword'
         ? OpenWakeWordEngine(modelAsset: config.wakeWordModelAsset, threshold: config.wakeWordThreshold)

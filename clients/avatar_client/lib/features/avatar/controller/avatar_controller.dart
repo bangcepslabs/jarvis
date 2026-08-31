@@ -16,7 +16,9 @@ import '../voice/voice_activity_detector.dart';
 import '../../voice/wake_word/wake_word_controller.dart' as native_wake;
 
 class AvatarController extends ChangeNotifier {
-  AvatarController(this.api, {bool wakeWordEnabled = false}) {
+  // Keep the public option name stable for app bootstrap and tests.
+  // ignore: prefer_initializing_formals
+  AvatarController(this.api, {bool wakeWordEnabled = false}) : _wakeWordEnabled = wakeWordEnabled {
     _lipSync = LipSyncPlaybackController(_AudioPlayerLipSyncSource(_player));
   }
   final JarvisApiClient api;
@@ -35,16 +37,21 @@ class AvatarController extends ChangeNotifier {
   bool _recording = false;
   bool _stopInProgress = false;
   bool _wakeStartInProgress = false;
+  bool _wakeRearmInProgress = false;
+  bool _wakeWordEnabled;
   bool _appInForeground = true;
   StreamSubscription<Amplitude>? _amplitudeSubscription;
   Stopwatch? _recordingElapsed;
+  DateTime? _lastVadLog;
+  DateTime? _recordingStartedAt;
   VoiceActivityDetector? _voiceActivityDetector;
   bool get isRecording => _recording;
   ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
-  bool get wakeWordEnabled => _wakeWordController?.state == native_wake.WakeWordControllerState.armed;
+  bool get wakeWordEnabled => _wakeWordEnabled;
   String get wakeWordStatus => _wakeWordController?.state.name ?? 'disabled';
 
   Future<void> setWakeWordEnabled(bool enabled) async {
+    _wakeWordEnabled = enabled;
     if (enabled) {
       await _wakeWordController?.rearm();
     } else {
@@ -81,6 +88,9 @@ class AvatarController extends ChangeNotifier {
     _stopInProgress = false;
     _voiceActivityDetector = VoiceActivityDetector();
     _recordingElapsed = Stopwatch()..start();
+    _lastVadLog = null;
+    _recordingStartedAt = DateTime.now();
+    if (kDebugMode) debugPrint('[voice_record] start=${_recordingStartedAt!.toIso8601String()}');
     errorMessage = null;
     notifyListeners();
     try {
@@ -102,11 +112,19 @@ class AvatarController extends ChangeNotifier {
 
   void _handleAmplitude(Amplitude amplitude) {
     if (!_recording || _stopInProgress || _recordingElapsed == null || _voiceActivityDetector == null) return;
+    if (kDebugMode) {
+      final now = DateTime.now();
+      if (_lastVadLog == null || now.difference(_lastVadLog!) >= const Duration(milliseconds: 500)) {
+        _lastVadLog = now;
+        debugPrint('[voice_vad] amplitude_db=${amplitude.current.toStringAsFixed(1)} elapsed_ms=${_recordingElapsed!.elapsedMilliseconds}');
+      }
+    }
     final decision = _voiceActivityDetector!.process(amplitude.current, _recordingElapsed!.elapsed);
     if (decision.event == VoiceActivityEvent.speechStarted) {
       // Keep the existing recording UI; the separate detector state is not AvatarState.
       notifyListeners();
     } else if (decision.event == VoiceActivityEvent.speechEnded || decision.event == VoiceActivityEvent.maximumDurationReached) {
+      if (kDebugMode) debugPrint('[voice_vad] stop_reason=${decision.event.name} speech_detected=${decision.speechDetected}');
       unawaited(_stopRecording(submit: decision.speechDetected));
     }
   }
@@ -116,11 +134,13 @@ class AvatarController extends ChangeNotifier {
     _stopInProgress = true;
     await _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
+    final recordingDuration = _recordingElapsed?.elapsed;
     _recordingElapsed?.stop();
     _recordingElapsed = null;
     try {
       final turnTimer = Stopwatch()..start();
       final path = await _recorder.stop();
+      final stoppedAt = DateTime.now();
       _recording = false;
       _stopInProgress = false;
       notifyListeners();
@@ -134,6 +154,11 @@ class AvatarController extends ChangeNotifier {
       if (path == null) return _fail('음성 녹음 파일이 생성되지 않았어요.');
       final file = File(path);
       if (!await file.exists()) return _fail('음성 녹음 파일을 찾을 수 없어요.');
+      final fileSize = await file.length();
+      if (kDebugMode) {
+        debugPrint('[voice_record] stop=${stoppedAt.toIso8601String()} duration_ms=${recordingDuration?.inMilliseconds ?? 'unknown'} path=$path size_bytes=$fileSize');
+        debugPrint('[voice_record] stt_input size_bytes=$fileSize');
+      }
       try {
         await _run(
           await XFile(path).readAsBytes(),
@@ -253,7 +278,7 @@ class AvatarController extends ChangeNotifier {
     switch (lifecycle) {
       case AppLifecycleState.resumed:
         final wakeState = _wakeWordController?.state;
-        if (!_recording && state == AvatarState.idle &&
+        if (_wakeWordEnabled && !_recording && state == AvatarState.idle &&
             (wakeState == native_wake.WakeWordControllerState.suspended ||
                 wakeState == native_wake.WakeWordControllerState.armed)) {
           await _wakeWordController?.rearm();
@@ -315,10 +340,27 @@ class AvatarController extends ChangeNotifier {
 
   Future<void> _rearmWakeIfAllowed() async {
     final wakeState = _wakeWordController?.state;
-    if (_appInForeground && !_recording && state == AvatarState.idle &&
+    if (_wakeRearmInProgress || (_wakeWordEnabled && _appInForeground && !_recording &&
+        (state == AvatarState.idle || state == AvatarState.error) &&
         (wakeState == native_wake.WakeWordControllerState.suspended ||
-            wakeState == native_wake.WakeWordControllerState.armed)) {
-      await _wakeWordController?.rearm();
+            wakeState == native_wake.WakeWordControllerState.armed))) {
+      if (!_wakeRearmInProgress) {
+        _wakeRearmInProgress = true;
+        try {
+          await Future<void>.delayed(const Duration(milliseconds: 1000));
+          if (!_wakeWordEnabled || !_appInForeground || _recording ||
+              (state != AvatarState.idle && state != AvatarState.error)) {
+            return;
+          }
+          if (state == AvatarState.error) {
+            state = AvatarState.idle;
+            notifyListeners();
+          }
+          await _wakeWordController?.rearm();
+        } finally {
+          _wakeRearmInProgress = false;
+        }
+      }
     }
   }
 

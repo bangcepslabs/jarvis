@@ -21,5 +21,8 @@ flutter:
   assets:
     - assets/avatars/development/ellen_workshop/
     - assets/avatars/development/ellen_workshop/免费模型艾莲.4096/
+    - assets/avatars/development/emilia_magical/
+    - assets/avatars/development/emilia_magical/motions/
+    - assets/avatars/development/emilia_magical/textures/
 
 

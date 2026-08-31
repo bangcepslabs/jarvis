@@ -43,7 +43,13 @@ class AvatarRendererConfig {
       defaultValue: 'shuiyin',
     );
     final configuredProfile = const String.fromEnvironment('JARVIS_AVATAR_PROFILE', defaultValue: 'placeholder');
-    final profile = AvatarProfiles.byId(configuredProfile == 'placeholder' && renderer.toLowerCase() == 'live2d' ? 'ellen_dev' : configuredProfile);
+    final requestedProfile = configuredProfile == 'placeholder' && renderer.toLowerCase() == 'live2d'
+        ? 'ellen_dev'
+        : configuredProfile;
+    final resolved = AvatarProfiles.byId(requestedProfile);
+    final profile = resolved == AvatarProfiles.placeholder && renderer.toLowerCase() == 'live2d'
+        ? AvatarProfiles.ellenDev
+        : resolved;
     return AvatarRendererConfig(
       kind: renderer.toLowerCase() == 'live2d' && flavor.toLowerCase() == 'live2d'
           ? AvatarRendererKind.live2d
@@ -118,16 +124,20 @@ Map<String, Object> live2DUpdateParams(
   AvatarPresentationHint hint,
   double mouthOpen,
 ) {
-  final reactionMotion = state == AvatarState.speaking && config.profile.supportsReactionMotions
-      ? config.profile.reactionMotions[hint.motionIntent]
-      : null;
+  final motionSelection = config.profile.motionSelectionFor(state, hint);
   final mappedExpression = config.profile.expressionFor(hint.emotion);
-  final expression = config.expression == 'shuiyin'
-      ? (mappedExpression ?? config.expression)
-      : config.expression;
-  return {
+  final expression = !config.profile.supportsExpressions
+      ? ''
+      : config.expression == 'shuiyin'
+          ? (mappedExpression ?? config.expression)
+          : config.expression;
+  final params = <String, Object>{
     'modelAsset': config.modelAsset,
-    'motion': reactionMotion ?? (config.profile.ambientMotions.isEmpty ? 'idle' : config.profile.ambientMotions.first),
+    'fallbackModelAsset': AvatarProfiles.ellenDev.modelAsset,
+    'avatarProfile': config.profile.id,
+    'motion': motionSelection.motion ?? '',
+    'motionCandidates': motionSelection.candidates,
+    'ambientMotions': config.profile.ambientMotions,
     'state': state.name,
     // Keep the watermark-hiding default for neutral responses, but allow
     // verified model expressions to override it for emotional responses.
@@ -147,6 +157,13 @@ Map<String, Object> live2DUpdateParams(
     'reaction': hint.reaction.name,
     'mouthOpen': mouthOpen,
   };
+  final height = config.profile.nativeHeight;
+  final offsetX = config.profile.nativeOffsetX;
+  final offsetY = config.profile.nativeOffsetY;
+  if (height != null) params['modelHeight'] = height;
+  if (offsetX != null) params['modelOffsetX'] = offsetX;
+  if (offsetY != null) params['modelOffsetY'] = offsetY;
+  return params;
 }
 
 Map<String, Object> live2DHostLifecycleParams(AppLifecycleState state) => {

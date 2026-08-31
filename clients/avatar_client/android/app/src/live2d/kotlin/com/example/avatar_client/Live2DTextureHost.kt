@@ -106,6 +106,17 @@ class Live2DTextureHost(
 
     private fun createRenderer(params: Map<*, *>): Live2DRenderer {
         val asset = params["modelAsset"] as? String ?: error("modelAsset is missing")
+        return try {
+            createRendererForAsset(asset, params)
+        } catch (error: Exception) {
+            val fallback = params["fallbackModelAsset"] as? String
+            if (fallback.isNullOrBlank() || fallback == asset) throw error
+            Log.w("JARVIS_LIVE2D", "avatar asset unavailable=$asset; falling back=$fallback", error)
+            createRendererForAsset(fallback, params)
+        }
+    }
+
+    private fun createRendererForAsset(asset: String, params: Map<*, *>): Live2DRenderer {
         val source = "flutter_assets/" + asset.split('/').joinToString("/")
         val destination = File(context.cacheDir, "jarvis-live2d/${source.substringBeforeLast('/')}")
         copyAssetTree(source.substringBeforeLast('/'), destination)

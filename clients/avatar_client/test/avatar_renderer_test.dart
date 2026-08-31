@@ -66,4 +66,47 @@ void main() {
     expect(payload['expression'], 'shock');
     expect(payload['motion'], 'idle2');
   });
+
+  test('Emilia payload uses verified motion names and skips unavailable expressions', () {
+    final payload = live2DUpdateParams(
+      AvatarRendererConfig(
+        kind: AvatarRendererKind.live2d,
+        modelAsset: AvatarProfiles.emiliaMagical.modelAsset,
+        expression: 'shuiyin',
+        profile: AvatarProfiles.emiliaMagical,
+      ),
+      AvatarState.speaking,
+      const AvatarPresentationHint(
+        emotion: AvatarEmotion.happy,
+        intensity: .8,
+        motionIntent: AvatarMotionIntent.positive,
+      ),
+      0,
+    );
+
+    expect(payload['expression'], '');
+    expect(payload['motion'], 'act_egao02');
+    expect(payload['motionCandidates'], contains('act_egao'));
+    expect(payload['ambientMotions'], ['select_idle', 'select_idle02']);
+    expect(payload['avatarProfile'], 'emilia_magical');
+    expect(payload['fallbackModelAsset'], AvatarProfiles.ellenDev.modelAsset);
+  });
+
+  test('Emilia neutral speech uses its body-motion pool and reduced mouth cap', () {
+    final payload = live2DUpdateParams(
+      AvatarRendererConfig(
+        kind: AvatarRendererKind.live2d,
+        modelAsset: AvatarProfiles.emiliaMagical.modelAsset,
+        expression: 'shuiyin',
+        profile: AvatarProfiles.emiliaMagical,
+      ),
+      AvatarState.speaking,
+      const AvatarPresentationHint(),
+      .8,
+    );
+
+    expect(payload['motionCandidates'], contains('act_normal03'));
+    expect(payload['mouthMaxOpen'], .50);
+    expect(payload['mouthNoiseGate'], .06);
+  });
 }

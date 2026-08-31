@@ -204,6 +204,7 @@ class Live2DRenderer(
             update.string("state", "idle"),
             update.string("expression", ""),
             update.string("motion", ""),
+            update.strings("motionCandidates"),
             update.string("reaction", "none"),
             update.number("intensity", 0.3f),
         )
@@ -225,6 +226,7 @@ class Live2DRenderer(
             model = Live2DModel(
                 root,
                 modelFile,
+                initial.string("avatarProfile", "unknown"),
                 initial.string("mouthOpenParameter", "ParamMouthOpenY"),
                 initial.number("mouthMin", 0f),
                 initial.number("mouthMax", 1f),
@@ -233,6 +235,10 @@ class Live2DRenderer(
                 initial.number("mouthNoiseGate", 0.04f),
                 initial.number("mouthAttackSeconds", 0.055f),
                 initial.number("mouthReleaseSeconds", 0.14f),
+                initial.number("modelHeight", 2.15f),
+                initial.number("modelOffsetX", 0f),
+                initial.number("modelOffsetY", -0.28f),
+                initial.strings("ambientMotions"),
             )
             if (expression.isNotEmpty()) {
                 val applied = model!!.applyExpression(expression)
@@ -351,3 +357,6 @@ private fun Map<String, Any?>?.string(key: String, fallback: String): String =
 
 private fun Map<String, Any?>?.number(key: String, fallback: Float): Float =
     (this?.get(key) as? Number)?.toFloat() ?: fallback
+
+private fun Map<String, Any?>?.strings(key: String): List<String> =
+    (this?.get(key) as? List<*>)?.mapNotNull { it as? String } ?: emptyList()

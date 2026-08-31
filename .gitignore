@@ -21,3 +21,12 @@ clients/avatar_client/android/app/src/main/assets/wake_word/development/*.onnx
 clients/avatar_client/assets/avatars/development/*
 !clients/avatar_client/assets/avatars/development/.gitkeep
 !clients/avatar_client/assets/avatars/development/README.md
+!clients/avatar_client/assets/avatars/development/emilia_magical/
+clients/avatar_client/assets/avatars/development/emilia_magical/*
+!clients/avatar_client/assets/avatars/development/emilia_magical/.gitkeep
+!clients/avatar_client/assets/avatars/development/emilia_magical/motions/
+clients/avatar_client/assets/avatars/development/emilia_magical/motions/*
+!clients/avatar_client/assets/avatars/development/emilia_magical/motions/.gitkeep
+!clients/avatar_client/assets/avatars/development/emilia_magical/textures/
+clients/avatar_client/assets/avatars/development/emilia_magical/textures/*
+!clients/avatar_client/assets/avatars/development/emilia_magical/textures/.gitkeep

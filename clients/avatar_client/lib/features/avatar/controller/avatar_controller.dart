@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
@@ -12,6 +13,7 @@ import '../domain/character_reaction_policy.dart';
 import '../lip_sync/lip_sync_analyzer.dart';
 import '../lip_sync/lip_sync_playback_controller.dart';
 import '../voice/voice_activity_detector.dart';
+import '../../voice/wake_word/wake_word_controller.dart';
 
 class AvatarController extends ChangeNotifier {
   AvatarController(this.api) {
@@ -34,8 +36,25 @@ class AvatarController extends ChangeNotifier {
   StreamSubscription<Amplitude>? _amplitudeSubscription;
   Stopwatch? _recordingElapsed;
   VoiceActivityDetector? _voiceActivityDetector;
+  WakeWordController? _wakeWordController;
+  bool _appInForeground = true;
   bool get isRecording => _recording;
   ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
+
+  void attachWakeWordController(WakeWordController controller) {
+    _wakeWordController = controller;
+  }
+
+  Future<void> onWakeWordDetected() => toggleRecording();
+
+  Future<void> handleLifecycle(AppLifecycleState lifecycle) async {
+    _appInForeground = lifecycle == AppLifecycleState.resumed;
+    if (lifecycle == AppLifecycleState.resumed) {
+      await _wakeWordController?.rearm();
+    } else {
+      await _wakeWordController?.suspend();
+    }
+  }
 
   Future<void> toggleRecording() async {
     if (_recording) {
@@ -43,6 +62,8 @@ class AvatarController extends ChangeNotifier {
       return;
     }
     if (!await _recorder.hasPermission()) return _fail('Microphone permission required');
+    await _wakeWordController?.suspend();
+    debugPrint('JARVIS_WAKE_WORD detector stopped before Flutter recorder starts');
     state = AvatarState.listening;
     _recording = true;
     _stopInProgress = false;
@@ -189,6 +210,8 @@ class AvatarController extends ChangeNotifier {
     } catch (error) {
       if (generation == _presentationGeneration) _fail(error.toString().replaceFirst('Exception: ', ''));
     } finally {
+      await _rearmWakeIfAllowed();
+      debugPrint('JARVIS_WAKE_WORD rearmed after turn completion');
       totalTimer.stop();
       if (kDebugMode) {
         final playbackStartDelay = playbackStartElapsed != null && processingElapsed != null
@@ -228,6 +251,7 @@ class AvatarController extends ChangeNotifier {
     final playbackStarted = _player.onPlayerStateChanged
         .where((state) => state == PlayerState.playing)
         .first;
+    final playbackCompleted = _player.onPlayerComplete.first;
     try {
       final envelope = _lipSyncAnalyzer.analyzeWav(audio);
       await _lipSync.play(envelope: envelope, audioBytes: audio);
@@ -236,6 +260,7 @@ class AvatarController extends ChangeNotifier {
       await _lipSync.stop();
       await _player.play(BytesSource(audio));
     }
+    await playbackCompleted;
     try {
       await playbackStarted.timeout(const Duration(seconds: 2));
       return turnTimer.elapsed;
@@ -252,7 +277,12 @@ class AvatarController extends ChangeNotifier {
     _stopInProgress = false;
     _amplitudeSubscription?.cancel();
     _amplitudeSubscription = null;
+    unawaited(_rearmWakeIfAllowed());
     notifyListeners();
+  }
+
+  Future<void> _rearmWakeIfAllowed() async {
+    if (_appInForeground) await _wakeWordController?.rearm();
   }
 
   @override
@@ -263,6 +293,7 @@ class AvatarController extends ChangeNotifier {
     _amplitudeSubscription?.cancel();
     _player.dispose();
     api.dispose();
+    _wakeWordController?.dispose();
     super.dispose();
   }
 }

@@ -15,6 +15,9 @@ tmp/
 data/stt_samples/
 data/models/tts/
 
+# Development-only Android wake-word model binaries
+clients/avatar_client/android/app/src/main/assets/wake_word/development/*.onnx
+
 clients/avatar_client/assets/avatars/development/*
 !clients/avatar_client/assets/avatars/development/.gitkeep
 !clients/avatar_client/assets/avatars/development/README.md

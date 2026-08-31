@@ -7,6 +7,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.StandardMessageCodec
 
 class MainActivity : FlutterActivity() {
+    private lateinit var wakeWordBridge: OpenWakeWordBridge
     private var textureHost: Live2DTextureHost? = null
     // Hybrid-composed Live2D owns a GLSurfaceView. Keep Flutter itself on a
     // TextureView so the two SurfaceView layers do not compete after an
@@ -15,6 +16,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        wakeWordBridge = OpenWakeWordBridge(this)
+        wakeWordBridge.attach(flutterEngine.dartExecutor.binaryMessenger)
         flutterEngine
             .platformViewsController
             .registry
@@ -25,6 +28,7 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        if (::wakeWordBridge.isInitialized) wakeWordBridge.onDestroy()
         textureHost?.release()
         textureHost = null
         super.onDestroy()

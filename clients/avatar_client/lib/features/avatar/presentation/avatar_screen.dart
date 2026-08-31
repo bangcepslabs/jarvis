@@ -15,12 +15,13 @@ class AvatarScreen extends StatefulWidget {
   State<AvatarScreen> createState() => _AvatarScreenState();
 }
 
-class _AvatarScreenState extends State<AvatarScreen> {
+class _AvatarScreenState extends State<AvatarScreen> with WidgetsBindingObserver {
   static const surfaceColor = Color(0xff151a22);
   final input = TextEditingController();
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(refresh);
   }
 
@@ -30,9 +31,15 @@ class _AvatarScreenState extends State<AvatarScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(refresh);
     input.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.controller.handleLifecycle(state);
   }
 
   @override

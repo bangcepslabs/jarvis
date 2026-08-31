@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../controller/avatar_controller.dart';
 import '../domain/avatar_state.dart';
 import 'avatar_renderer.dart';
-import '../wake/wake_word_engine.dart';
 
 class AvatarScreen extends StatefulWidget {
   const AvatarScreen({
@@ -79,9 +78,9 @@ class _AvatarScreenState extends State<AvatarScreen> with WidgetsBindingObserver
                           color: Colors.white70,
                         ),
                       ),
-                      if (controller.wakeWordEnabled || controller.wakeWordStatus == WakeWordStatus.unavailable)
+                      if (controller.wakeWordEnabled || controller.wakeWordStatus == 'unavailable')
                         Text(
-                          controller.wakeWordStatus == WakeWordStatus.unavailable
+                          controller.wakeWordStatus == 'unavailable'
                               ? 'Wake Word unavailable'
                               : 'Wake Word ON',
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white54),

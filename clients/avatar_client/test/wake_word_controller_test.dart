@@ -1,51 +1,62 @@
-import 'package:flutter_test/flutter_test.dart';
-import 'package:avatar_client/features/avatar/wake/wake_word_engine.dart';
+import 'dart:async';
 
-class FakeWakeWordEngine implements WakeWordEngine {
-  FakeWakeWordEngine(this.available);
-  final bool available;
-  WakeWordCallback? callback;
-  @override bool get isAvailable => available;
-  @override Future<void> start(WakeWordCallback onDetected) async => callback = onDetected;
-  @override Future<void> pause() async {}
-  @override Future<void> resume() async {}
-  @override Future<void> stop() async {}
-  @override Future<void> dispose() async {}
-}
+import 'package:flutter_test/flutter_test.dart';
+import 'package:avatar_client/features/voice/wake_word/wake_word_controller.dart';
+import 'package:avatar_client/features/voice/wake_word/wake_word_engine.dart';
 
 void main() {
+  late FakeWakeWordEngine engine;
+  late WakeWordController controller;
+  late int detected;
+
+  setUp(() {
+    engine = FakeWakeWordEngine();
+    detected = 0;
+    controller = WakeWordController(engine, onDetected: () async => detected++);
+  });
+
+  tearDown(() => controller.dispose());
+
+  test('arms engine and forwards one detection', () async {
+    await controller.arm();
+    expect(engine.starts, 1);
+    engine.emit(const WakeWordDetected(name: 'Hey Jarvis', score: .8));
+    await Future<void>.delayed(Duration.zero);
+    expect(detected, 1);
+    expect(engine.stops, 1);
+    expect(controller.state, WakeWordControllerState.suspended);
+  });
+
+  test('duplicate detection while suspended is ignored', () async {
+    await controller.arm();
+    engine.emit(const WakeWordDetected(name: 'Hey Jarvis', score: .8));
+    engine.emit(const WakeWordDetected(name: 'Hey Jarvis', score: .9));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(detected, 1);
+  });
+
   test('unavailable engine is safe', () async {
-    final engine = FakeWakeWordEngine(false);
-    var detected = 0;
-    final controller = WakeWordController(engine: engine, onDetected: () => detected++);
-    await controller.setEnabled(true);
-    expect(controller.status, WakeWordStatus.unavailable);
-    expect(detected, 0);
+    final unavailable = WakeWordController(UnavailableWakeWordEngine('missing'));
+    await unavailable.arm();
+    expect(unavailable.state, WakeWordControllerState.unavailable);
+    unavailable.dispose();
   });
 
-  test('only listening events are forwarded', () async {
-    final engine = FakeWakeWordEngine(true);
-    var detected = 0;
-    final controller = WakeWordController(engine: engine, onDetected: () => detected++);
-    await controller.setEnabled(true);
-    await engine.callback!();
-    expect(detected, 1);
-    await controller.pause();
-    await engine.callback!();
-    expect(detected, 1);
-    await controller.resume();
-    await engine.callback!();
-    expect(detected, 2);
+  test('dispose prevents restart', () async {
+    controller.dispose();
+    await controller.arm();
+    expect(engine.starts, 0);
+    expect(controller.state, WakeWordControllerState.disposed);
   });
 
-  test('disable invalidates an in-flight event', () async {
-    final engine = FakeWakeWordEngine(true);
-    var detected = 0;
-    final controller = WakeWordController(engine: engine, onDetected: () => detected++);
-    await controller.setEnabled(true);
-    final callback = engine.callback!;
-    await controller.setEnabled(false);
-    await callback();
-    expect(detected, 0);
+  test('old async arm completion cannot overwrite suspend', () async {
+    final started = Completer<void>();
+    engine.startHook = () => started.future;
+    final arm = controller.arm();
+    await Future<void>.delayed(Duration.zero);
+    await controller.suspend();
+    started.complete();
+    await arm;
+    expect(controller.state, WakeWordControllerState.suspended);
   });
 }

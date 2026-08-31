@@ -50,6 +50,7 @@ android {
 }
 
 dependencies {
+    implementation("xyz.rementia:openwakeword:0.1.5")
     val live2dCore = file("../live2d_sdk/Core/android/Live2DCubismCore.aar")
     if (live2dCore.exists()) {
         add("live2dImplementation", files(live2dCore))

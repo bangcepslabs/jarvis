@@ -50,6 +50,17 @@ def parse_presentation_response(content: str | None) -> tuple[str, PresentationH
     return text, PresentationHint()
 
 
+def has_usable_response_text(content: str | None) -> bool:
+    """Return whether an LLM response contains user-facing text.
+
+    A presentation marker is metadata, not a reply.  Keeping this check next
+    to the marker parser prevents marker-only responses from entering the
+    normal conversation history or the character presentation pass.
+    """
+    reply, _ = parse_presentation_response(content)
+    return bool(reply.strip())
+
+
 def present_refusal_response(user_message: str, response: str) -> str:
     """Keep an explicit refusal boundary while removing canned service tone.
 

@@ -8,7 +8,7 @@ from app.actions.service import ActionConfirmationService
 from app.actions.store import ActiveActionExistsError
 from app.agent.models import AgentResponse, ChatMessage, ToolCallSummary
 from app.agent.prompt import build_system_prompt, infer_conversation_style
-from app.agent.presentation import parse_presentation_response, present_refusal_response
+from app.agent.presentation import has_usable_response_text, parse_presentation_response, present_refusal_response
 from app.agent.tool_router import ToolRouter
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
@@ -229,10 +229,44 @@ class JarvisAgent:
         if not llm_response.tool_calls:
             _trace_response("post_character_input", llm_response.content)
             reply, hint = parse_presentation_response(llm_response.content)
+            if not reply.strip() and not has_usable_response_text(llm_response.content):
+                logger.warning("empty_llm_reply_after_presentation_marker retrying=true")
+                retry_messages = list(messages)
+                retry_messages.insert(
+                    1,
+                    ChatMessage(
+                        role="system",
+                        content=(
+                            "The previous assistant response contained only presentation metadata. "
+                            "Answer the user's message now with a concise, natural user-facing reply. "
+                            "Include the presentation marker only after actual reply text."
+                        ),
+                    ),
+                )
+                try:
+                    retry = await self._provider_chat(
+                        retry_messages,
+                        [],
+                        "none",
+                        summary_present=bool(summary_state and summary_state.text),
+                        conversation_turns=selection.selected_history_turns,
+                        memory_count=selection.included_memory_count,
+                        phase="main_retry",
+                    )
+                    reply, hint = parse_presentation_response(retry.content)
+                except (LLMRateLimitError, LLMProviderError):
+                    logger.exception("empty_llm_reply_retry_failed")
+                    reply, hint = "", hint
             if hint == type(hint)():
                 hint = self._character_brain.presentation_hint(conversation_id)
             reply = present_refusal_response(message, reply)
-            response = AgentResponse(reply=_language_safe_reply(message, reply or "I could not generate a response."), presentation_hint=hint)
+            response = AgentResponse(
+                reply=_language_safe_reply(
+                    message,
+                    reply or "\uc751\ub2f5\uc774 \ube44\uc5c8\uc5b4. \ud55c \ubc88\ub9cc \ub354 \ub9d0\ud574\uc918.",
+                ),
+                presentation_hint=hint,
+            )
             if self._memory_curator and self._memory and memory_command is None:
                 try:
                     decision = await self._memory_curator.curate(message, response.reply, history, memories)

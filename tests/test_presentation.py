@@ -1,4 +1,12 @@
-from app.agent.presentation import parse_presentation_response, present_refusal_response
+from app.agent.presentation import has_usable_response_text, parse_presentation_response, present_refusal_response
+
+
+def test_marker_only_response_is_not_user_facing_text():
+    marker = '<!--JARVIS_PRESENTATION {"emotion":"neutral"}-->'
+
+    assert parse_presentation_response(marker)[0] == ""
+    assert has_usable_response_text(marker) is False
+    assert has_usable_response_text(f"실제 답변 {marker}") is True
 
 
 def test_valid_presentation_marker_is_extracted_without_second_llm_call():

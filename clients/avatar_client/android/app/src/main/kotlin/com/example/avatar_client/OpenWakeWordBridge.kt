@@ -48,7 +48,12 @@ class OpenWakeWordBridge(private val activity: FlutterActivity) : MethodChannel.
 
     private fun initialize(modelAsset: String, threshold: Float) {
         disposeEngine()
-        val required = listOf("melspectrogram.onnx", "embedding_model.onnx", modelAsset)
+        val modelDirectory = "wake_word/development/"
+        val required = listOf(
+            "${modelDirectory}melspectrogram.onnx",
+            "${modelDirectory}embedding_model.onnx",
+            modelAsset,
+        )
         val missing = required.filterNot { assetExists(it) }
         if (missing.isNotEmpty()) { Log.i(TAG, "model unavailable: ${missing.joinToString()}"); pendingUnavailable = "Missing wake word assets: ${missing.joinToString()}"; return }
         Log.i(TAG, "wake engine initialized; assets loaded: ${required.joinToString()}")

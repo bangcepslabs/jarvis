@@ -39,3 +39,8 @@ class AgentResponse(BaseModel):
     tool_calls: list[ToolCallSummary] = Field(default_factory=list)
     pending_action: PendingActionSummary | None = None
     presentation_hint: PresentationHint | None = None
+    # Internal response provenance. API routes expose only the public response
+    # contract above; the agent uses this to avoid persisting synthetic errors
+    # as few-shot conversation examples.
+    response_origin: Literal["llm", "llm_retry", "deterministic", "system_error_fallback", "synthetic_failure"] = "llm"
+    persist_history: bool = True

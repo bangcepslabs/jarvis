@@ -3,6 +3,7 @@ import math
 from dataclasses import dataclass
 
 from app.agent.models import ChatMessage
+from app.agent.presentation import is_known_synthetic_failure_text
 from app.conversation.models import ConversationMessage
 from app.memory.models import MemoryEntry
 
@@ -49,10 +50,33 @@ def is_assistant_presentation_boilerplate(message: ConversationMessage) -> bool:
     )
 
 
-def filter_history_for_prompt(history: list[ConversationMessage]) -> list[ConversationMessage]:
-    """Filter only imitation-prone assistant presentation from prompt history."""
+def is_assistant_synthetic_failure(message: ConversationMessage) -> bool:
+    return message.role == "assistant" and is_known_synthetic_failure_text(message.content)
 
-    return [item for item in history if not is_assistant_presentation_boilerplate(item)]
+
+def filter_history_for_prompt(history: list[ConversationMessage]) -> list[ConversationMessage]:
+    """Exclude synthetic-failure turns and imitation-prone presentation text.
+
+    A legacy synthetic failure is removed with the pending user turn so the
+    prompt never receives malformed user/user sequences. User-authored text is
+    never matched or removed by phrase; only assistant messages can trigger
+    this filtering.
+    """
+    filtered: list[ConversationMessage] = []
+    pending_turn: list[ConversationMessage] = []
+    for item in history:
+        if item.role == "user":
+            filtered.extend(pending_turn)
+            pending_turn = [item]
+            continue
+        if is_assistant_synthetic_failure(item):
+            pending_turn = []
+            continue
+        if is_assistant_presentation_boilerplate(item):
+            continue
+        pending_turn.append(item)
+    filtered.extend(pending_turn)
+    return filtered
 
 
 class EstimatedTokenCounter:
@@ -122,6 +146,11 @@ class ConversationContextManager:
         original_history = history or []
         filtered_history = filter_history_for_prompt(original_history)
         filtered_count = len(original_history) - len(filtered_history)
+        synthetic_failures_removed = sum(
+            1 for item in original_history if is_assistant_synthetic_failure(item)
+        )
+        if synthetic_failures_removed:
+            logger.info("[history_filter] synthetic_failures_removed=%s", synthetic_failures_removed)
         history_groups = self._turns(filtered_history)
         memory_messages = self._memory_messages(memories or [])
         fixed_tokens = self._counter.estimate_message(system) + self._counter.estimate_message(current)

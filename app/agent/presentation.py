@@ -28,6 +28,18 @@ _SERVICE_CLOSINGS = (
     "how else can i help",
 )
 
+_SYNTHETIC_FAILURE_RESPONSES = frozenset({
+    "i could not generate a response.",
+    "\uc751\ub2f5\uc744 \ub9cc\ub4e4\uc9c0 \ubabb\ud588\uc5b4\uc694. \ub2e4\uc2dc \ub9d0\uc500\ud574 \uc8fc\uc138\uc694.",
+    "the ai service is currently unavailable.",
+    "\ud604\uc7ac ai \uc11c\ube44\uc2a4\ub97c \uc0ac\uc6a9\ud560 \uc218 \uc5c6\uc5b4\uc694.",
+    "the requested information could not be retrieved.",
+    "\uc694\uccad\ud55c \uc815\ubcf4\ub97c \uac00\uc838\uc624\uc9c0 \ubabb\ud588\uc5b4\uc694.",
+    "tool result received.",
+    "\ub3c4\uad6c \uacb0\uacfc\ub97c \ud655\uc778\ud588\uc5b4\uc694.",
+    "\uc751\ub2f5\uc774 \ube44\uc5c8\uc5b4. \ud55c \ubc88\ub9cc \ub354 \ub9d0\ud574\uc918.",
+})
+
 
 def parse_presentation_response(content: str | None) -> tuple[str, PresentationHint]:
     """Extract optional one-call presentation metadata without breaking plain text."""
@@ -59,6 +71,24 @@ def has_usable_response_text(content: str | None) -> bool:
     """
     reply, _ = parse_presentation_response(content)
     return bool(reply.strip())
+
+
+def is_known_synthetic_failure_text(text: str | None) -> bool:
+    """Recognize only the agent's own fixed fallback/sentinel replies."""
+    normalized = " ".join((text or "").casefold().split())
+    return normalized in _SYNTHETIC_FAILURE_RESPONSES or normalized.startswith(
+        "the ai service is temporarily rate limited."
+    )
+
+
+def invalid_generated_response_reason(content: str | None) -> str | None:
+    """Return a narrow invalidity reason for a main LLM response."""
+    reply, _ = parse_presentation_response(content)
+    if not reply.strip():
+        return "empty_or_presentation_only"
+    if is_known_synthetic_failure_text(reply):
+        return "generated_failure_fallback"
+    return None
 
 
 def present_refusal_response(user_message: str, response: str) -> str:

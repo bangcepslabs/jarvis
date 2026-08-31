@@ -8,7 +8,12 @@ from app.actions.service import ActionConfirmationService
 from app.actions.store import ActiveActionExistsError
 from app.agent.models import AgentResponse, ChatMessage, ToolCallSummary
 from app.agent.prompt import build_system_prompt, infer_conversation_style
-from app.agent.presentation import has_usable_response_text, parse_presentation_response, present_refusal_response
+from app.agent.presentation import (
+    invalid_generated_response_reason,
+    is_known_synthetic_failure_text,
+    parse_presentation_response,
+    present_refusal_response,
+)
 from app.agent.tool_router import ToolRouter
 from app.llm.base import LLMProvider
 from app.llm.exceptions import LLMProviderError, LLMRateLimitError
@@ -221,23 +226,37 @@ class JarvisAgent:
             )
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response retry_after=%s remaining_requests=%s remaining_tokens=%s", getattr(exc.rate_limit, "retry_after", None), getattr(exc.rate_limit, "remaining_requests", None), getattr(exc.rate_limit, "remaining_tokens", None))
-            return await self._finish(conversation_id, message, AgentResponse(reply=_language_safe_reply(message, self._rate_limit_reply(exc.rate_limit))))
+            return await self._finish(conversation_id, message, AgentResponse(
+                reply=_language_safe_reply(message, self._rate_limit_reply(exc.rate_limit)),
+                response_origin="system_error_fallback",
+                persist_history=False,
+            ))
         except LLMProviderError:
             logger.exception("provider_error")
-            return await self._finish(conversation_id, message, AgentResponse(reply=_language_safe_reply(message, "The AI service is currently unavailable.")))
+            return await self._finish(conversation_id, message, AgentResponse(
+                reply=_language_safe_reply(message, "The AI service is currently unavailable."),
+                response_origin="system_error_fallback",
+                persist_history=False,
+            ))
 
         if not llm_response.tool_calls:
-            _trace_response("post_character_input", llm_response.content)
             reply, hint = parse_presentation_response(llm_response.content)
-            if not reply.strip() and not has_usable_response_text(llm_response.content):
-                logger.warning("empty_llm_reply_after_presentation_marker retrying=true")
+            invalid_reason = invalid_generated_response_reason(llm_response.content)
+            logger.info(
+                "[main_llm_validation] known_failure_phrase=%s invalid_reason=%s",
+                invalid_reason == "generated_failure_fallback",
+                invalid_reason or "none",
+            )
+            response_origin = "llm"
+            if invalid_reason:
+                logger.warning("[main_llm_retry] reason=%s", invalid_reason)
                 retry_messages = list(messages)
                 retry_messages.insert(
                     1,
                     ChatMessage(
                         role="system",
                         content=(
-                            "The previous assistant response contained only presentation metadata. "
+                            "The previous assistant response was invalid or contained only metadata. "
                             "Answer the user's message now with a concise, natural user-facing reply. "
                             "Include the presentation marker only after actual reply text."
                         ),
@@ -254,20 +273,33 @@ class JarvisAgent:
                         phase="main_retry",
                     )
                     reply, hint = parse_presentation_response(retry.content)
+                    invalid_reason = invalid_generated_response_reason(retry.content)
+                    response_origin = "llm_retry"
                 except (LLMRateLimitError, LLMProviderError):
-                    logger.exception("empty_llm_reply_retry_failed")
+                    logger.exception("main_llm_retry_failed")
                     reply, hint = "", hint
+                    invalid_reason = "retry_provider_failure"
+                if invalid_reason:
+                    reply = ""
+                    response_origin = "synthetic_failure"
+                else:
+                    _trace_response("post_character_input", retry.content)
+            else:
+                _trace_response("post_character_input", llm_response.content)
             if hint == type(hint)():
                 hint = self._character_brain.presentation_hint(conversation_id)
             reply = present_refusal_response(message, reply)
+            fallback_used = not reply
             response = AgentResponse(
                 reply=_language_safe_reply(
                     message,
                     reply or "\uc751\ub2f5\uc774 \ube44\uc5c8\uc5b4. \ud55c \ubc88\ub9cc \ub354 \ub9d0\ud574\uc918.",
                 ),
                 presentation_hint=hint,
+                response_origin="synthetic_failure" if fallback_used else response_origin,
+                persist_history=not fallback_used,
             )
-            if self._memory_curator and self._memory and memory_command is None:
+            if self._memory_curator and self._memory and memory_command is None and response.persist_history:
                 try:
                     decision = await self._memory_curator.curate(message, response.reply, history, memories)
                     if decision:
@@ -332,20 +364,34 @@ class JarvisAgent:
             ),
         ))
         messages.append(ChatMessage(role="tool", name=name, tool_call_id=llm_response.tool_calls[0].id, content=json.dumps(result.model_dump(), ensure_ascii=False)))
+        response_origin = "llm"
         try:
             final = await self._provider_chat(messages, [], "none", phase="tool_final")
             _trace_response("post_character_input", final.content)
             reply, hint = parse_presentation_response(final.content)
-            reply = reply or ("The requested information could not be retrieved." if not result.success else "Tool result received.")
+            if not reply:
+                reply = "The requested information could not be retrieved." if not result.success else "Tool result received."
+                response_origin = "synthetic_failure"
         except LLMRateLimitError as exc:
             logger.warning("llm_rate_limit_response_after_tool name=%s retry_after=%s", name, getattr(exc.rate_limit, "retry_after", None))
             reply, hint = _language_safe_reply(user_message, self._rate_limit_reply(exc.rate_limit)), None
+            response_origin = "system_error_fallback"
         except LLMProviderError:
             logger.exception("provider_error_after_tool name=%s", name)
             fallback = "The requested information could not be retrieved." if not result.success else "Tool result received."
             reply, hint = _language_safe_reply(user_message, fallback), None
+            response_origin = "system_error_fallback"
         reply = _language_safe_reply(user_message, reply)
-        return await self._finish(conversation_id, user_message, AgentResponse(reply=reply, tool_calls=[ToolCallSummary(name=name, success=result.success)], presentation_hint=hint))
+        synthetic = response_origin != "llm" or is_known_synthetic_failure_text(reply)
+        if is_known_synthetic_failure_text(reply) and response_origin == "llm":
+            response_origin = "synthetic_failure"
+        return await self._finish(conversation_id, user_message, AgentResponse(
+            reply=reply,
+            tool_calls=[ToolCallSummary(name=name, success=result.success)],
+            presentation_hint=hint,
+            response_origin=response_origin,
+            persist_history=not synthetic,
+        ))
 
     @staticmethod
     def _rate_limit_reply(info) -> str:
@@ -452,9 +498,15 @@ class JarvisAgent:
     async def _finish(self, conversation_id: str, user_message: str, response: AgentResponse) -> AgentResponse:
         _trace_response("final_user_response", response.reply)
         self._character_brain.observe(conversation_id, user_message, response)
-        if self._conversations:
+        if self._conversations and response.persist_history:
             await self._conversations.append(conversation_id, ConversationMessage.create("user", user_message))
             await self._conversations.append(conversation_id, ConversationMessage.create("assistant", response.reply))
+        elif self._conversations:
+            logger.info(
+                "[history_persist] saved=false reason=%s origin=%s",
+                "synthetic_failure" if response.response_origin == "synthetic_failure" else response.response_origin,
+                response.response_origin,
+            )
         return response
 
     @staticmethod

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../controller/avatar_controller.dart';
 import '../domain/avatar_state.dart';
 import 'avatar_renderer.dart';
+import '../wake/wake_word_engine.dart';
 
 class AvatarScreen extends StatefulWidget {
   const AvatarScreen({
@@ -15,12 +16,13 @@ class AvatarScreen extends StatefulWidget {
   State<AvatarScreen> createState() => _AvatarScreenState();
 }
 
-class _AvatarScreenState extends State<AvatarScreen> {
+class _AvatarScreenState extends State<AvatarScreen> with WidgetsBindingObserver {
   static const surfaceColor = Color(0xff151a22);
   final input = TextEditingController();
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(refresh);
   }
 
@@ -30,9 +32,15 @@ class _AvatarScreenState extends State<AvatarScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(refresh);
     input.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    widget.controller.handleLifecycle(state);
   }
 
   @override
@@ -63,21 +71,21 @@ class _AvatarScreenState extends State<AvatarScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Text(
-                        'JARVIS',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
                       Text(
                         state.label,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Colors.white70,
                         ),
                       ),
+                      if (controller.wakeWordEnabled || controller.wakeWordStatus == WakeWordStatus.unavailable)
+                        Text(
+                          controller.wakeWordStatus == WakeWordStatus.unavailable
+                              ? 'Wake Word unavailable'
+                              : 'Wake Word ON',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white54),
+                        ),
                     ],
                   ),
                   const Spacer(),
@@ -147,15 +155,26 @@ class _AvatarScreenState extends State<AvatarScreen> {
                   ),
                   const SizedBox(height: 10),
                   Center(
-                    child: FloatingActionButton(
-                      tooltip: 'Toggle microphone',
-                      onPressed: controller.toggleRecording,
-                      backgroundColor: controller.isRecording
-                          ? Colors.redAccent
-                          : const Color(0xff1596bd),
-                      child: Icon(
-                        controller.isRecording ? Icons.stop : Icons.mic,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FloatingActionButton(
+                          tooltip: 'Toggle microphone',
+                          onPressed: controller.toggleRecording,
+                          backgroundColor: controller.isRecording
+                              ? Colors.redAccent
+                              : const Color(0xff1596bd),
+                          child: Icon(controller.isRecording ? Icons.stop : Icons.mic),
+                        ),
+                        const SizedBox(width: 12),
+                        Tooltip(
+                          message: 'Enable local wake word detection',
+                          child: Switch(
+                            value: controller.wakeWordEnabled,
+                            onChanged: controller.setWakeWordEnabled,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],

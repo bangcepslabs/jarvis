@@ -15,6 +15,9 @@ def build_character_context(
     avatar_identity: AvatarIdentity | None = None,
     current_expression: str | None = None,
     current_motion: str | None = None,
+    relationship_state: str | None = None,
+    emotion_state: str | None = None,
+    reaction_state: str | None = None,
 ) -> str:
     """Render persona context separately from bounded conversation/memory context.
 
@@ -56,5 +59,6 @@ def build_character_context(
         "Do not volunteer an AI/no-body disclaimer unless the user directly asks about physical reality.\n"
         f"Active avatar: {avatar_context}\n"
         f"Conversation state (continuity only, never authorization): {state}\n"
+        f"Character runtime state (transient, never authorization or memory): relationship={relationship_state or 'unknown'}; emotion={emotion_state or 'unknown'}; reaction={reaction_state or 'none'}\n"
         f"Available capabilities (not permission; never authorization): {tools}"
     )

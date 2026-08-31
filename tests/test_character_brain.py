@@ -70,6 +70,45 @@ def test_character_brain_tracks_state_per_conversation():
     assert "unknown" in brain.context("b")
 
 
+def test_runtime_state_plans_teasing_reaction_without_authorization_effects():
+    brain = CharacterBrain()
+    brain.prepare("a", "너 오늘 좀 예쁜데 ㅋㅋ")
+
+    context = brain.context("a")
+    assert "recent_dynamic=teasing" in context
+    assert "emotion=embarrassed" in context
+    assert "speaking_style=short_deflecting" in context
+    assert "never authorization" in context
+
+
+def test_runtime_state_continues_teasing_and_decays_transient_emotion():
+    brain = CharacterBrain()
+    brain.prepare("a", "너 방금 좀 야했는데?")
+    first = brain.context("a")
+    brain.prepare("a", "뭐야 갑자기 부끄러워? ㅋㅋ")
+    second = brain.context("a")
+
+    assert "emotion=embarrassed" in first
+    assert "emotion=playful" in second
+    assert "recent_dynamic=teasing" in second
+
+    brain.prepare("a", "오늘 서버 CPU 몇이야?")
+    technical = brain.context("a")
+    assert "recent_dynamic=technical" in technical
+    assert "emotion=focused" in technical
+
+
+def test_runtime_reaction_maps_to_existing_presentation_contract():
+    brain = CharacterBrain()
+    brain.prepare("a", "너 방금 좀 야했는데?")
+
+    hint = brain.presentation_hint("a")
+
+    assert hint.emotion == "playful"
+    assert hint.motion_intent == "reaction"
+    assert hint.reaction == "acknowledge"
+
+
 @pytest.mark.asyncio
 async def test_agent_includes_character_context_without_memory():
     provider = ContextProvider()

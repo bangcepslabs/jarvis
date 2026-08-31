@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:record/record.dart';
 import '../../../core/network/jarvis_api_client.dart';
 import '../domain/avatar_state.dart';
@@ -12,15 +13,22 @@ import '../domain/character_reaction_policy.dart';
 import '../lip_sync/lip_sync_analyzer.dart';
 import '../lip_sync/lip_sync_playback_controller.dart';
 import '../voice/voice_activity_detector.dart';
+import '../wake/wake_word_engine.dart';
 
 class AvatarController extends ChangeNotifier {
-  AvatarController(this.api) {
+  AvatarController(this.api, {WakeWordEngine? wakeWordEngine, bool wakeWordEnabled = false}) {
     _lipSync = LipSyncPlaybackController(_AudioPlayerLipSyncSource(_player));
+    wakeWord = WakeWordController(
+      engine: wakeWordEngine ?? const UnavailableWakeWordEngine(),
+      onDetected: _onWakeWordDetected,
+    );
+    if (wakeWordEnabled) unawaited(wakeWord.setEnabled(true));
   }
   final JarvisApiClient api;
   final AudioRecorder _recorder = AudioRecorder();
   final AudioPlayer _player = AudioPlayer();
   late final LipSyncPlaybackController _lipSync;
+  late final WakeWordController wakeWord;
   final LipSyncAnalyzer _lipSyncAnalyzer = const LipSyncAnalyzer();
   AvatarState state = AvatarState.idle;
   String conversationId = 'avatar-${DateTime.now().millisecondsSinceEpoch}';
@@ -31,11 +39,30 @@ class AvatarController extends ChangeNotifier {
   int _presentationGeneration = 0;
   bool _recording = false;
   bool _stopInProgress = false;
+  bool _wakeStartInProgress = false;
   StreamSubscription<Amplitude>? _amplitudeSubscription;
   Stopwatch? _recordingElapsed;
   VoiceActivityDetector? _voiceActivityDetector;
   bool get isRecording => _recording;
   ValueListenable<double> get mouthOpen => _lipSync.mouthOpen;
+  bool get wakeWordEnabled => wakeWord.enabled;
+  WakeWordStatus get wakeWordStatus => wakeWord.status;
+
+  Future<void> setWakeWordEnabled(bool enabled) async {
+    await wakeWord.setEnabled(enabled);
+    notifyListeners();
+  }
+
+  Future<void> _onWakeWordDetected() async {
+    if (!wakeWord.enabled || wakeWord.status != WakeWordStatus.listening) return;
+    if (_wakeStartInProgress || _recording || _stopInProgress || state != AvatarState.idle) return;
+    _wakeStartInProgress = true;
+    try {
+      await toggleRecording();
+    } finally {
+      _wakeStartInProgress = false;
+    }
+  }
 
   Future<void> toggleRecording() async {
     if (_recording) {
@@ -43,6 +70,7 @@ class AvatarController extends ChangeNotifier {
       return;
     }
     if (!await _recorder.hasPermission()) return _fail('Microphone permission required');
+    await wakeWord.pause();
     state = AvatarState.listening;
     _recording = true;
     _stopInProgress = false;
@@ -94,6 +122,7 @@ class AvatarController extends ChangeNotifier {
       if (!submit) {
         state = AvatarState.idle;
         notifyListeners();
+        await wakeWord.resume();
         return;
       }
       final recorderStopElapsed = turnTimer.elapsed;
@@ -118,6 +147,7 @@ class AvatarController extends ChangeNotifier {
       _recording = false;
       _stopInProgress = false;
       _fail('Recording failed: ${error.toString().replaceFirst('Exception: ', '')}');
+      await wakeWord.resume();
     }
   }
 
@@ -208,6 +238,23 @@ class AvatarController extends ChangeNotifier {
           'total=${_formatDuration(totalTimer.elapsed)}',
         );
       }
+      if (generation == _presentationGeneration && wakeWord.enabled && !_recording) {
+        await wakeWord.resume();
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> handleLifecycle(AppLifecycleState lifecycle) async {
+    switch (lifecycle) {
+      case AppLifecycleState.resumed:
+        if (!_recording && state == AvatarState.idle) await wakeWord.resume();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        await wakeWord.pause();
+        if (_recording) await _stopRecording(submit: false);
     }
   }
 
@@ -263,6 +310,7 @@ class AvatarController extends ChangeNotifier {
     _amplitudeSubscription?.cancel();
     _player.dispose();
     api.dispose();
+    unawaited(wakeWord.dispose());
     super.dispose();
   }
 }

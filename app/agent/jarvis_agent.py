@@ -146,6 +146,7 @@ class JarvisAgent:
         if self._memory:
             memories = await self._memory.search_memories(message)
         history = await self._context_messages(conversation_id, all_history=self._context_manager_explicit)
+        self._character_brain.prepare(conversation_id, message)
         system_prompt = build_system_prompt(response_mode, infer_conversation_style(history)) + "\n\n" + self._character_brain.context(
             conversation_id,
             tuple(tool.name for tool in self._tool_registry.list_tools()),
@@ -228,6 +229,8 @@ class JarvisAgent:
         if not llm_response.tool_calls:
             _trace_response("post_character_input", llm_response.content)
             reply, hint = parse_presentation_response(llm_response.content)
+            if hint == type(hint)():
+                hint = self._character_brain.presentation_hint(conversation_id)
             reply = present_refusal_response(message, reply)
             response = AgentResponse(reply=_language_safe_reply(message, reply or "I could not generate a response."), presentation_hint=hint)
             if self._memory_curator and self._memory and memory_command is None:
